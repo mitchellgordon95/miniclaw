@@ -174,6 +174,12 @@ async function handleMessage(channel, content, meta = {}) {
         fullResponse += text;
         broadcast({ type: 'delta', text });
       },
+      onToolStart: (name, input) => {
+        broadcast({ type: 'tool_start', name, input });
+      },
+      onToolResult: (output) => {
+        broadcast({ type: 'tool_result', output });
+      },
     });
 
     if (!fullResponse) fullResponse = result.content || '';

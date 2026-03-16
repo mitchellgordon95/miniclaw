@@ -15,6 +15,10 @@
     .badge-heartbeat { background: #f59e0b; }
     .badge-cron { background: #8b5cf6; }
     pre { white-space: pre-wrap; word-wrap: break-word; }
+    .tool-block { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; margin: 4px 0; font-size: 0.75rem; font-family: monospace; color: #8b949e; max-width: 40rem; }
+    .tool-block .tool-name { color: #58a6ff; font-weight: 600; }
+    .tool-block .tool-input { color: #c9d1d9; margin-top: 2px; }
+    .tool-block .tool-output { color: #7ee787; margin-top: 2px; white-space: pre-wrap; word-break: break-all; }
     .typing-dot { animation: blink 1.4s infinite both; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -146,6 +150,22 @@
           }
           streamContent += data.text;
           streamEl.querySelector('.content').textContent = streamContent;
+          scrollToBottom();
+        } else if (data.type === 'tool_start') {
+          const el = document.createElement('div');
+          el.className = 'tool-block';
+          el.id = 'tool-active';
+          el.innerHTML = `<span class="tool-name">${escapeHtml(data.name)}</span>`;
+          if (data.input) el.innerHTML += `<div class="tool-input">${escapeHtml(data.input)}</div>`;
+          messagesEl.appendChild(el);
+          scrollToBottom();
+        } else if (data.type === 'tool_result') {
+          const el = document.getElementById('tool-active');
+          if (el && data.output) {
+            const out = data.output.length > 300 ? data.output.slice(0, 300) + '...' : data.output;
+            el.innerHTML += `<div class="tool-output">${escapeHtml(out)}</div>`;
+          }
+          if (el) el.removeAttribute('id');
           scrollToBottom();
         } else if (data.type === 'typing') {
           typingEl.classList.toggle('hidden', !data.active);
