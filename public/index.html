@@ -54,6 +54,9 @@
 
   <!-- Input -->
   <div class="p-4 border-t border-gray-700">
+    <div id="plan-badge" class="hidden text-xs text-yellow-400 mb-1 flex items-center gap-1">
+      <span>&#128736;</span> Plan mode <span class="text-gray-500">(shift+tab to toggle)</span>
+    </div>
     <div class="flex gap-2">
       <textarea id="input" rows="1" placeholder="Message Wright..."
         class="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
@@ -232,6 +235,18 @@
       return div.innerHTML;
     }
 
+    // --- Plan Mode ---
+    let planMode = false;
+    const planBadge = document.getElementById('plan-badge');
+
+    function togglePlanMode() {
+      planMode = !planMode;
+      planBadge.classList.toggle('hidden', !planMode);
+      inputEl.classList.toggle('ring-2', planMode);
+      inputEl.classList.toggle('ring-yellow-500', planMode);
+      inputEl.placeholder = planMode ? 'Plan with Wright...' : 'Message Wright...';
+    }
+
     // --- Send ---
     function autoResize() {
       inputEl.style.height = 'auto';
@@ -241,15 +256,19 @@
     function send() {
       const content = inputEl.value.trim();
       if (!content || !ws || ws.readyState !== 1) return;
-      ws.send(JSON.stringify({ type: 'message', content }));
+      ws.send(JSON.stringify({ type: 'message', content, planMode }));
       inputEl.value = '';
       autoResize();
+      if (planMode) togglePlanMode();
     }
 
     sendBtn.addEventListener('click', send);
     inputEl.addEventListener('input', autoResize);
     inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        togglePlanMode();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         send();
       }

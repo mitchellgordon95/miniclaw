@@ -62,7 +62,7 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'message' && msg.content) {
-        await handleMessage('web', msg.content, {});
+        await handleMessage('web', msg.content, { planMode: msg.planMode || false });
       }
     } catch (err) {
       ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -202,6 +202,7 @@ async function handleMessage(channel, content, meta = {}) {
       model: meta.model || null,
       timeout: meta.timeout || 300000,
       isolated: meta.isolated || false,
+      planMode: meta.planMode || false,
       onDelta: isUserFacing ? (text) => {
         fullResponse += text;
         broadcast({ type: 'delta', text });
