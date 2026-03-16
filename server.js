@@ -109,18 +109,26 @@ app.use(express.static(join(__dirname, 'public')));
 app.get('/api/messages', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const sessionId = getSessionId();
-  if (!sessionId) return res.json([]);
+  if (!sessionId) return res.json({ messages: [], total: 0, offset: 0 });
 
   try {
-    const limit = parseInt(req.query.limit) || 100;
-    const messages = await getSessionMessages(sessionId, {
-      dir: config.workspacePath,
-      limit,
-    });
-    res.json(messages);
+    const all = await getSessionMessages(sessionId, { dir: config.workspacePath });
+    const total = all.length;
+    const limit = parseInt(req.query.limit) || 50;
+
+    if (req.query.offset !== undefined) {
+      // "Load more" — return messages ending at this offset
+      const end = Math.max(0, parseInt(req.query.offset));
+      const start = Math.max(0, end - limit);
+      res.json({ messages: all.slice(start, end), total, offset: start });
+    } else {
+      // Initial load — return last N
+      const offset = Math.max(0, total - limit);
+      res.json({ messages: all.slice(offset), total, offset });
+    }
   } catch (err) {
     console.error('[api] Failed to read session:', err.message);
-    res.json([]);
+    res.json({ messages: [], total: 0, offset: 0 });
   }
 });
 

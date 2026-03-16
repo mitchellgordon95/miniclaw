@@ -100,46 +100,81 @@
     let generating = false;
 
     // --- Load history from session transcript ---
+    let historyOffset = 0;
+    let historyTotal = 0;
+    let loadingMore = false;
+
     async function loadHistory() {
       try {
-        const res = await fetch(`/api/messages?limit=100&token=${TOKEN}`);
+        const res = await fetch(`/api/messages?limit=50&token=${TOKEN}`);
         if (!res.ok) return;
-        const messages = await res.json();
+        const data = await res.json();
+        historyOffset = data.offset;
+        historyTotal = data.total;
         messagesEl.innerHTML = '';
-        for (const msg of messages) renderSessionMessage(msg);
+        for (const msg of data.messages) renderSessionMessage(msg);
         scrollToBottom();
       } catch (e) {
         console.error('Failed to load history:', e);
       }
     }
 
-    function renderSessionMessage(msg) {
+    async function loadMore() {
+      if (loadingMore || historyOffset <= 0) return;
+      loadingMore = true;
+
+      try {
+        const res = await fetch(`/api/messages?limit=50&offset=${historyOffset}&token=${TOKEN}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        historyOffset = data.offset;
+
+        // Preserve scroll position
+        const prevHeight = messagesEl.scrollHeight;
+        const frag = document.createDocumentFragment();
+        for (const msg of data.messages) {
+          renderSessionMessage(msg, frag);
+        }
+        messagesEl.insertBefore(frag, messagesEl.firstChild);
+        messagesEl.scrollTop = messagesEl.scrollHeight - prevHeight;
+      } catch (e) {
+        console.error('Failed to load more:', e);
+      } finally {
+        loadingMore = false;
+      }
+    }
+
+    messagesEl.addEventListener('scroll', () => {
+      if (messagesEl.scrollTop < 100 && historyOffset > 0 && !loadingMore) {
+        loadMore();
+      }
+    });
+
+    function renderSessionMessage(msg, container) {
+      const target = container || messagesEl;
       const content = msg.message?.content;
       if (msg.type === 'user') {
-        // User messages: content is a string or array with text/tool_result blocks
         if (typeof content === 'string') {
-          addMessage({ role: 'user', channel: 'web', content });
+          target.appendChild(createMessageEl({ role: 'user', channel: 'web', content }));
         } else if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
-              addMessage({ role: 'user', channel: 'web', content: block.text });
+              target.appendChild(createMessageEl({ role: 'user', channel: 'web', content: block.text }));
             }
-            // Skip tool_result blocks in history (they're shown with the tool call)
           }
         }
       } else if (msg.type === 'assistant') {
-        // Assistant messages: content is array of text + tool_use blocks
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text' && block.text) {
-              addMessage({ role: 'assistant', channel: 'web', content: block.text });
+              target.appendChild(createMessageEl({ role: 'assistant', channel: 'web', content: block.text }));
             } else if (block.type === 'tool_use') {
               const el = document.createElement('div');
               el.className = 'tool-block';
               const inputStr = formatToolInput(block.name, block.input);
               el.innerHTML = `<span class="tool-name">${escapeHtml(block.name)}</span>`;
               if (inputStr) el.innerHTML += `<div class="tool-input">${escapeHtml(inputStr)}</div>`;
-              messagesEl.appendChild(el);
+              target.appendChild(el);
             }
           }
         }
