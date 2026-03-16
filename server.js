@@ -7,7 +7,7 @@ import { dirname, join } from 'path';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { runClaude, getQueueLength } from './lib/claude.js';
 import { appendMessage, readMessages } from './lib/log.js';
-import { sendReply, validateTwilioWebhook } from './lib/channels.js';
+import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
 import { startScheduler, stopScheduler } from './lib/cron.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,21 @@ const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 const startTime = Date.now();
+
+// --- SMS PIN Auth ---
+
+const smsAuth = new Map(); // phoneNumber -> { authenticatedAt }
+const SMS_AUTH_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function isSmsAuthenticated(phoneNumber) {
+  const entry = smsAuth.get(phoneNumber);
+  if (!entry) return false;
+  if (Date.now() - entry.authenticatedAt > SMS_AUTH_TTL) {
+    smsAuth.delete(phoneNumber);
+    return false;
+  }
+  return true;
+}
 
 // --- Auth ---
 
@@ -99,6 +114,19 @@ app.post('/twilio-sms/webhook', async (req, res) => {
 
   // Respond immediately with empty TwiML (we reply async via API)
   res.type('text/xml').send('<Response/>');
+
+  // PIN gate
+  if (config.twilio.pin && !isSmsAuthenticated(result.from)) {
+    if (result.body.trim() === config.twilio.pin) {
+      smsAuth.set(result.from, { authenticatedAt: Date.now() });
+      await sendSMS(result.from, 'Authenticated.');
+      console.log(`[sms] PIN accepted from ${result.from}`);
+    } else {
+      await sendSMS(result.from, 'PIN required.');
+      console.log(`[sms] PIN rejected from ${result.from}`);
+    }
+    return;
+  }
 
   try {
     await handleMessage('sms', result.body, { from: result.from });
