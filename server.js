@@ -237,6 +237,9 @@ async function handleMessage(channel, content, meta = {}) {
       onToolResult: isUserFacing ? (output) => {
         broadcast({ type: 'tool_result', output });
       } : null,
+      onPlan: isUserFacing ? (plan) => {
+        broadcast({ type: 'plan', content: plan });
+      } : null,
     });
 
     if (!fullResponse) fullResponse = result.content || '';

@@ -43,6 +43,9 @@
     .tool-line .tl-name { color: #58a6ff; display: inline-block; width: 65px; font-weight: 600; }
     .tool-line .tl-input { color: #c9d1d9; }
     .tool-line-detail { padding: 4px 10px 8px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; font-size: 0.7rem; border-top: 1px solid #1e293b; display: none; }
+    .plan-card { background: #1a1a2e; border: 1px solid #f59e0b; border-radius: 8px; margin: 8px 0; max-width: 40rem; overflow: hidden; }
+    .plan-card-header { padding: 6px 12px; color: #f59e0b; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid #f59e0b33; }
+    .plan-card-body { padding: 12px; max-height: 300px; overflow-y: auto; }
     .typing-dot { animation: blink 1.4s infinite both; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -196,6 +199,8 @@
               target.appendChild(createMessageEl({ role: 'assistant', channel: 'web', content: group.text }));
             } else if (group.type === 'tools') {
               renderToolPanel(target, group.blocks);
+            } else if (group.type === 'plan') {
+              target.appendChild(createPlanCard(group.text));
             }
           }
         }
@@ -207,8 +212,13 @@
       let toolGroup = null;
       for (const block of blocks) {
         if (block.type === 'tool_use') {
-          if (!toolGroup) { toolGroup = { type: 'tools', blocks: [] }; groups.push(toolGroup); }
-          toolGroup.blocks.push(block);
+          if (block.name === 'ExitPlanMode' && block.input?.plan) {
+            toolGroup = null;
+            groups.push({ type: 'plan', text: block.input.plan });
+          } else {
+            if (!toolGroup) { toolGroup = { type: 'tools', blocks: [] }; groups.push(toolGroup); }
+            toolGroup.blocks.push(block);
+          }
         } else {
           toolGroup = null;
           if (block.type === 'text' && block.text) {
@@ -288,6 +298,13 @@
       target.appendChild(panel);
     }
 
+    function createPlanCard(planText) {
+      const card = document.createElement('div');
+      card.className = 'plan-card';
+      card.innerHTML = `<div class="plan-card-header">Plan</div><div class="plan-card-body md-content">${renderMarkdown(planText)}</div>`;
+      return card;
+    }
+
     // --- WebSocket ---
     let wasConnected = false;
     function connect() {
@@ -355,6 +372,10 @@
           scrollToBottom();
         } else if (data.type === 'tool_result') {
           // Tool result — panel already has the line
+          scrollToBottom();
+        } else if (data.type === 'plan') {
+          activeToolPanel = null;
+          messagesEl.appendChild(createPlanCard(data.content));
           scrollToBottom();
         } else if (data.type === 'typing') {
           typingEl.classList.toggle('hidden', !data.active);
