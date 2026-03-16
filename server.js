@@ -240,6 +240,9 @@ async function handleMessage(channel, content, meta = {}) {
       onPlan: isUserFacing ? (plan) => {
         broadcast({ type: 'plan', content: plan });
       } : null,
+      onStatus: isUserFacing ? (status) => {
+        broadcast({ type: 'status', status });
+      } : null,
     });
 
     if (!fullResponse) fullResponse = result.content || '';

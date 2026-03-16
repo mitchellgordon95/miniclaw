@@ -74,9 +74,12 @@
 
   <!-- Typing indicator -->
   <div id="typing" class="px-4 py-1 text-sm text-gray-500 hidden">
-    <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-    <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full ml-1"></span>
-    <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full ml-1"></span>
+    <span id="typing-dots">
+      <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+      <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full ml-1"></span>
+      <span class="typing-dot inline-block w-1.5 h-1.5 bg-gray-400 rounded-full ml-1"></span>
+    </span>
+    <span id="typing-status" class="hidden text-yellow-400 text-xs font-medium"></span>
   </div>
 
   <!-- Input -->
@@ -377,8 +380,28 @@
           activeToolPanel = null;
           messagesEl.appendChild(createPlanCard(data.content));
           scrollToBottom();
+        } else if (data.type === 'status') {
+          const dots = document.getElementById('typing-dots');
+          const statusEl = document.getElementById('typing-status');
+          if (data.status === 'compacting') {
+            dots.classList.add('hidden');
+            statusEl.textContent = 'Compacting context...';
+            statusEl.classList.remove('hidden');
+            typingEl.classList.remove('hidden');
+          } else {
+            dots.classList.remove('hidden');
+            statusEl.classList.add('hidden');
+            statusEl.textContent = '';
+          }
         } else if (data.type === 'typing') {
+          const dots = document.getElementById('typing-dots');
+          const statusEl = document.getElementById('typing-status');
           typingEl.classList.toggle('hidden', !data.active);
+          if (!data.active) {
+            dots.classList.remove('hidden');
+            statusEl.classList.add('hidden');
+            statusEl.textContent = '';
+          }
           setGenerating(data.active);
           if (data.active) scrollToBottom();
         } else if (data.type === 'queued') {
