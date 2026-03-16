@@ -99,9 +99,11 @@
           addMessage(data);
           scrollToBottom();
         } else if (data.type === 'stream_end') {
-          // Streaming finished — update the stream element with final content
           if (streamEl) {
             streamEl.querySelector('.content').textContent = data.content;
+          } else {
+            // No deltas arrived (e.g. error) — create the message directly
+            addMessage({ role: 'assistant', channel: data.channel || 'web', content: data.content });
           }
           finalizeStream();
           scrollToBottom();
