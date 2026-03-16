@@ -27,6 +27,10 @@ const startTime = Date.now();
 
 let lastRoute = { channel: 'web' };
 
+// --- In-flight response (for reload recovery) ---
+
+let inFlight = null; // { channel, content, ts }
+
 // --- SMS PIN Auth ---
 
 const smsAuth = new Map(); // phoneNumber -> { authenticatedAt }
@@ -109,7 +113,12 @@ app.get('/api/messages', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const limit = parseInt(req.query.limit) || 100;
   const after = req.query.after || null;
-  res.json(readMessages({ limit, after }));
+  const messages = readMessages({ limit, after });
+  // Include in-flight response if one is being streamed
+  if (inFlight && inFlight.content) {
+    messages.push({ role: 'assistant', channel: inFlight.channel, content: inFlight.content, ts: inFlight.ts, partial: true });
+  }
+  res.json(messages);
 });
 
 app.post('/twilio-sms/webhook', async (req, res) => {
@@ -199,7 +208,10 @@ async function handleMessage(channel, content, meta = {}) {
   if (isUserFacing && queueLen > 0) {
     broadcast({ type: 'queued', position: queueLen });
   }
-  if (isUserFacing) broadcast({ type: 'typing', active: true });
+  if (isUserFacing) {
+    broadcast({ type: 'typing', active: true });
+    inFlight = { channel, content: '', ts: new Date().toISOString() };
+  }
 
   let resultSessionId = null;
   try {
@@ -212,6 +224,7 @@ async function handleMessage(channel, content, meta = {}) {
       planMode: meta.planMode || false,
       onDelta: isUserFacing ? (text) => {
         fullResponse += text;
+        if (inFlight) inFlight.content = fullResponse;
         broadcast({ type: 'delta', text });
       } : (text) => { fullResponse += text; },
       onToolStart: isUserFacing ? (name, input) => {
@@ -230,6 +243,7 @@ async function handleMessage(channel, content, meta = {}) {
   }
 
   if (isUserFacing) {
+    inFlight = null;
     broadcast({ type: 'typing', active: false });
     appendMessage('assistant', channel, fullResponse, { inReplyTo: msgId });
     broadcast({ type: 'stream_end', channel, content: fullResponse });
