@@ -60,6 +60,7 @@
       <nav class="flex gap-3 text-sm">
         <span class="text-blue-400 font-medium">Chat</span>
         <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
+        <a href="/outbox.html" class="text-gray-400 hover:text-white">Outbox</a>
       </nav>
     </div>
     <div class="flex items-center gap-3">
@@ -143,7 +144,7 @@
         historyTotal = data.total;
         messagesEl.innerHTML = '';
         for (const msg of data.messages) renderSessionMessage(msg);
-        scrollToBottom();
+        requestAnimationFrame(() => scrollToBottom());
       } catch (e) {
         console.error('Failed to load history:', e);
       }

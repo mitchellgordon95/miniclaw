@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync } from 'fs';
 
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
@@ -108,7 +109,7 @@ app.use(express.static(join(__dirname, 'public')));
 
 app.get('/api/messages', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  const sessionId = getSessionId();
+  const sessionId = req.query.sessionId || getSessionId();
   if (!sessionId) return res.json({ messages: [], total: 0, offset: 0 });
 
   try {
@@ -168,6 +169,56 @@ app.get('/api/cron/runs', (req, res) => {
   res.json(readCronRuns(limit));
 });
 
+// --- Outbox API ---
+
+const OUTBOX_PATH = join(config.workspacePath, 'data/outbox.json');
+
+function readOutbox() {
+  try {
+    return JSON.parse(readFileSync(OUTBOX_PATH, 'utf8'));
+  } catch {
+    return { items: [] };
+  }
+}
+
+function writeOutbox(data) {
+  writeFileSync(OUTBOX_PATH, JSON.stringify(data, null, 2));
+}
+
+app.get('/api/outbox', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const data = readOutbox();
+  const status = req.query.status; // optional filter
+  const items = status ? data.items.filter(i => i.status === status) : data.items;
+  res.json({ items });
+});
+
+app.post('/api/outbox/:id/action', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const { action, feedback } = req.body; // action: approve, reject, feedback
+  if (!['approve', 'reject', 'feedback'].includes(action)) {
+    return res.status(400).json({ error: 'invalid action' });
+  }
+
+  const data = readOutbox();
+  const item = data.items.find(i => i.id === req.params.id);
+  if (!item) return res.status(404).json({ error: 'item not found' });
+
+  if (action === 'approve') {
+    item.status = 'approved';
+    item.approvedAt = new Date().toISOString();
+  } else if (action === 'reject') {
+    item.status = 'rejected';
+    item.rejectedAt = new Date().toISOString();
+  } else if (action === 'feedback') {
+    item.feedback = item.feedback || [];
+    item.feedback.push({ text: feedback, ts: new Date().toISOString() });
+  }
+
+  writeOutbox(data);
+  res.json({ ok: true, item });
+});
+
 app.get('/api/status', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const init = getInitInfo();
@@ -176,6 +227,7 @@ app.get('/api/status', (req, res) => {
     apiKeySource: init.apiKeySource,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     queueLength: getQueueLength(),
+    sessionId: getSessionId(),
   });
 });
 

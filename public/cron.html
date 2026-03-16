@@ -5,13 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MiniClaw - Cron</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body { background: #0f172a; color: #e2e8f0; }
     .status-ok { color: #10b981; }
     .status-error { color: #ef4444; }
     .run-row { cursor: pointer; transition: background 0.15s; }
     .run-row:hover { background: #1e293b; }
+    .run-row.active { background: #1e293b; border-left: 3px solid #3b82f6; }
     .response-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; }
+    .msg-user { background: #1e3a5f; }
+    .msg-assistant { background: #1e293b; }
+    .md-content { font-size: 0.875rem; line-height: 1.6; }
+    .md-content p { margin: 0.4em 0; }
+    .md-content p:first-child { margin-top: 0; }
+    .md-content p:last-child { margin-bottom: 0; }
+    .md-content h1, .md-content h2, .md-content h3 { font-weight: 600; margin: 0.6em 0 0.3em; color: #f1f5f9; }
+    .md-content code { background: #1e293b; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.85em; color: #e2e8f0; }
+    .md-content pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75em; margin: 0.5em 0; overflow-x: auto; }
+    .md-content pre code { background: none; padding: 0; font-size: 0.8em; }
+    .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
+    .md-content li { margin: 0.2em 0; }
+    .md-content a { color: #60a5fa; text-decoration: underline; }
+    .md-content blockquote { border-left: 3px solid #475569; padding-left: 0.75em; margin: 0.5em 0; color: #94a3b8; }
+    .md-content strong { color: #f1f5f9; }
+    .tool-panel { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; margin: 4px 0; max-width: 40rem; font-size: 0.75rem; font-family: monospace; overflow: hidden; }
+    .tool-panel-header { padding: 4px 10px; color: #58a6ff; cursor: pointer; display: flex; justify-content: space-between; user-select: none; }
+    .tool-panel-header:hover { background: #161b22; }
+    .tool-panel-body { max-height: 120px; overflow-y: auto; border-top: 1px solid #30363d; }
+    .tool-panel.collapsed .tool-panel-body { display: none; }
+    .tool-line { padding: 2px 10px; color: #8b949e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .tool-line:hover { background: #161b22; }
+    .tool-line .tl-name { color: #58a6ff; display: inline-block; width: 65px; font-weight: 600; }
+    .tool-line .tl-input { color: #c9d1d9; }
+    .tool-line-detail { padding: 4px 10px 8px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; font-size: 0.7rem; border-top: 1px solid #1e293b; display: none; }
+    .plan-card { background: #1a1a2e; border: 1px solid #f59e0b; border-radius: 8px; margin: 8px 0; max-width: 40rem; overflow: hidden; }
+    .plan-card-header { padding: 6px 12px; color: #f59e0b; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid #f59e0b33; }
+    .plan-card-body { padding: 12px; max-height: 300px; overflow-y: auto; }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -22,14 +52,30 @@
       <nav class="flex gap-3 text-sm">
         <a href="/" class="text-gray-400 hover:text-white">Chat</a>
         <span class="text-blue-400 font-medium">Cron</span>
+        <a href="/outbox.html" class="text-gray-400 hover:text-white">Outbox</a>
       </nav>
     </div>
   </div>
 
-  <!-- Content -->
-  <div class="flex-1 overflow-y-auto p-4">
-    <div id="runs" class="max-w-4xl mx-auto space-y-1"></div>
-    <div id="empty" class="text-gray-500 text-center py-8 hidden">No cron runs yet</div>
+  <!-- Split view: runs list + session viewer -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Runs list -->
+    <div id="runs-panel" class="w-full overflow-y-auto p-4 transition-all">
+      <div id="runs" class="max-w-4xl mx-auto space-y-1"></div>
+      <div id="empty" class="text-gray-500 text-center py-8 hidden">No cron runs yet</div>
+    </div>
+
+    <!-- Session viewer (hidden by default) -->
+    <div id="session-panel" class="hidden w-1/2 flex flex-col border-l border-gray-700">
+      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-gray-900">
+        <div>
+          <span id="session-title" class="text-sm font-medium text-blue-400"></span>
+          <span id="session-time" class="text-xs text-gray-500 ml-2"></span>
+        </div>
+        <button id="close-session" class="text-gray-500 hover:text-white text-sm px-2">&#10005;</button>
+      </div>
+      <div id="session-messages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+    </div>
   </div>
 
   <script>
@@ -38,6 +84,194 @@
 
     const runsEl = document.getElementById('runs');
     const emptyEl = document.getElementById('empty');
+    const runsPanel = document.getElementById('runs-panel');
+    const sessionPanel = document.getElementById('session-panel');
+    const sessionMessages = document.getElementById('session-messages');
+    const sessionTitle = document.getElementById('session-title');
+    const sessionTime = document.getElementById('session-time');
+
+    let activeRow = null;
+    let mainSessionId = null;
+
+    // Fetch main session ID so we can filter it out of cron runs
+    fetch(`/api/status?token=${TOKEN}`).then(r => r.json()).then(s => { mainSessionId = s.sessionId; }).catch(() => {});
+
+    document.getElementById('close-session').addEventListener('click', closeSession);
+
+    function closeSession() {
+      sessionPanel.classList.add('hidden');
+      runsPanel.classList.remove('w-1/2');
+      runsPanel.classList.add('w-full');
+      if (activeRow) { activeRow.classList.remove('active'); activeRow = null; }
+    }
+
+    async function openSession(run, row) {
+      if (!run.sessionId) return;
+
+      if (activeRow === row) { closeSession(); return; }
+      if (activeRow) activeRow.classList.remove('active');
+      activeRow = row;
+      row.classList.add('active');
+
+      sessionTitle.textContent = run.jobName;
+      sessionTime.textContent = new Date(run.startedAt).toLocaleString();
+      sessionMessages.innerHTML = '<div class="text-gray-500 text-sm">Loading session...</div>';
+
+      runsPanel.classList.remove('w-full');
+      runsPanel.classList.add('w-1/2');
+      sessionPanel.classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/api/messages?sessionId=${run.sessionId}&limit=200&token=${TOKEN}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+
+        sessionMessages.innerHTML = '';
+        if (data.messages.length === 0) {
+          sessionMessages.innerHTML = '<div class="text-gray-500 text-sm">No messages in this session</div>';
+          return;
+        }
+        for (const msg of data.messages) renderSessionMessage(msg);
+      } catch (e) {
+        sessionMessages.innerHTML = `<div class="text-red-400 text-sm">Failed to load session: ${e.message}</div>`;
+      }
+    }
+
+    // --- Message rendering ---
+
+    function renderSessionMessage(msg) {
+      const content = msg.message?.content;
+      if (msg.type === 'user') {
+        if (typeof content === 'string') {
+          sessionMessages.appendChild(createMessageEl({ role: 'user', content }));
+        } else if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text') {
+              sessionMessages.appendChild(createMessageEl({ role: 'user', content: block.text }));
+            }
+          }
+        }
+      } else if (msg.type === 'assistant') {
+        if (Array.isArray(content)) {
+          const groups = groupContentBlocks(content);
+          for (const group of groups) {
+            if (group.type === 'text') {
+              sessionMessages.appendChild(createMessageEl({ role: 'assistant', content: group.text }));
+            } else if (group.type === 'tools') {
+              renderToolPanel(sessionMessages, group.blocks);
+            } else if (group.type === 'plan') {
+              sessionMessages.appendChild(createPlanCard(group.text));
+            }
+          }
+        }
+      }
+    }
+
+    function groupContentBlocks(blocks) {
+      const groups = [];
+      let toolGroup = null;
+      for (const block of blocks) {
+        if (block.type === 'tool_use') {
+          if (block.name === 'ExitPlanMode' && block.input?.plan) {
+            toolGroup = null;
+            groups.push({ type: 'plan', text: block.input.plan });
+          } else {
+            if (!toolGroup) { toolGroup = { type: 'tools', blocks: [] }; groups.push(toolGroup); }
+            toolGroup.blocks.push(block);
+          }
+        } else {
+          toolGroup = null;
+          if (block.type === 'text' && block.text) {
+            groups.push({ type: 'text', text: block.text });
+          }
+        }
+      }
+      return groups;
+    }
+
+    function formatToolInput(name, input) {
+      if (!input) return '';
+      if (name === 'Bash') return input.command || '';
+      if (name === 'Read') return input.file_path || '';
+      if (name === 'Edit') return input.file_path || '';
+      if (name === 'Write') return input.file_path || '';
+      if (name === 'Glob') return input.pattern || '';
+      if (name === 'Grep') return input.pattern || '';
+      if (name === 'Skill') return input.skill || '';
+      if (name === 'Agent') return input.description || '';
+      if (name === 'send_sms') return input.message || '';
+      return JSON.stringify(input).slice(0, 200);
+    }
+
+    function createToolPanel() {
+      const panel = document.createElement('div');
+      panel.className = 'tool-panel collapsed';
+      const header = document.createElement('div');
+      header.className = 'tool-panel-header';
+      header.innerHTML = '<span class="tp-count">0 tool calls</span><span class="tp-toggle">&#9654;</span>';
+      header.addEventListener('click', () => {
+        panel.classList.toggle('collapsed');
+        header.querySelector('.tp-toggle').innerHTML = panel.classList.contains('collapsed') ? '&#9654;' : '&#9660;';
+      });
+      const body = document.createElement('div');
+      body.className = 'tool-panel-body';
+      panel.appendChild(header);
+      panel.appendChild(body);
+      return panel;
+    }
+
+    function addToolLine(panel, name, input) {
+      const body = panel.querySelector('.tool-panel-body');
+      const line = document.createElement('div');
+      line.className = 'tool-line';
+      const truncInput = (input || '').length > 80 ? input.slice(0, 80) + '...' : (input || '');
+      line.innerHTML = `<span class="tl-name">${escapeHtml(name)}</span><span class="tl-input">${escapeHtml(truncInput)}</span>`;
+      const detail = document.createElement('div');
+      detail.className = 'tool-line-detail';
+      detail.textContent = input || '';
+      line.addEventListener('click', (e) => { e.stopPropagation(); detail.style.display = detail.style.display === 'none' ? 'block' : 'none'; });
+      body.appendChild(line);
+      body.appendChild(detail);
+      const count = body.querySelectorAll('.tool-line').length;
+      panel.querySelector('.tp-count').textContent = `${count} tool call${count !== 1 ? 's' : ''}`;
+    }
+
+    function renderToolPanel(target, toolBlocks) {
+      const panel = createToolPanel();
+      for (const block of toolBlocks) {
+        addToolLine(panel, block.name, formatToolInput(block.name, block.input));
+      }
+      target.appendChild(panel);
+    }
+
+    function createPlanCard(planText) {
+      const card = document.createElement('div');
+      card.className = 'plan-card';
+      card.innerHTML = `<div class="plan-card-header">Plan</div><div class="plan-card-body md-content">${renderMarkdown(planText)}</div>`;
+      return card;
+    }
+
+    function renderMarkdown(text) {
+      return marked.parse(text || '', { breaks: true });
+    }
+
+    function createMessageEl(msg) {
+      const div = document.createElement('div');
+      const isUser = msg.role === 'user';
+      div.className = `rounded-lg p-3 max-w-2xl ${isUser ? 'msg-user ml-auto' : 'msg-assistant'}`;
+      const contentHtml = isUser
+        ? `<pre class="text-sm leading-relaxed" style="white-space:pre-wrap">${escapeHtml(msg.content || '')}</pre>`
+        : `<div class="md-content">${renderMarkdown(msg.content || '')}</div>`;
+      div.innerHTML = `
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs text-gray-500">${isUser ? 'Prompt' : 'Wright'}</span>
+        </div>
+        ${contentHtml}
+      `;
+      return div;
+    }
+
+    // --- Cron Runs List ---
 
     async function loadRuns() {
       try {
@@ -60,6 +294,7 @@
           const started = new Date(run.startedAt).toLocaleString();
           const duration = run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : '?';
           const preview = (run.response || run.error || '').slice(0, 100);
+          const hasSession = !!run.sessionId && run.sessionId !== mainSessionId;
 
           row.innerHTML = `
             <div class="flex items-center gap-3">
@@ -67,27 +302,25 @@
               <span class="font-medium text-sm w-40">${escapeHtml(run.jobName)}</span>
               <span class="text-xs text-gray-500">${started}</span>
               <span class="text-xs text-gray-600">${duration}</span>
-              ${run.sessionId ? `<span class="text-xs text-gray-700 font-mono">${run.sessionId.slice(0, 8)}</span>` : ''}
+              ${hasSession ? '<span class="text-xs text-blue-500 cursor-pointer">session</span>' : ''}
             </div>
             ${preview ? `<div class="text-xs text-gray-500 mt-1 truncate pl-8">${escapeHtml(preview)}</div>` : ''}
           `;
 
-          // Expand on click
-          let expanded = false;
-          row.addEventListener('click', () => {
-            expanded = !expanded;
-            const existing = row.querySelector('.response-box');
-            if (existing) {
-              existing.remove();
-              return;
-            }
-            if (run.response || run.error) {
-              const box = document.createElement('div');
-              box.className = 'response-box mt-2 ml-8';
-              box.textContent = run.response || `Error: ${run.error}`;
-              row.appendChild(box);
-            }
-          });
+          if (hasSession) {
+            row.addEventListener('click', () => openSession(run, row));
+          } else {
+            row.addEventListener('click', () => {
+              const existing = row.querySelector('.response-box');
+              if (existing) { existing.remove(); return; }
+              if (run.response || run.error) {
+                const box = document.createElement('div');
+                box.className = 'response-box mt-2 ml-8';
+                box.textContent = run.response || `Error: ${run.error}`;
+                row.appendChild(box);
+              }
+            });
+          }
 
           runsEl.appendChild(row);
         }
@@ -103,7 +336,6 @@
     }
 
     loadRuns();
-    // Refresh every 60s
     setInterval(loadRuns, 60000);
   </script>
 </body>
