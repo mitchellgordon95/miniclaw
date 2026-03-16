@@ -9,10 +9,12 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.76",
     "express": "^4.21",
     "node-cron": "^3.0",
     "twilio": "^5.4",
     "uuid": "^11.1",
-    "ws": "^8.18"
+    "ws": "^8.18",
+    "zod": "^4.3.6"
   }
 }
