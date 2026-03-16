@@ -25,7 +25,10 @@
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
     <h1 class="text-lg font-semibold">MiniClaw</h1>
-    <span id="status" class="text-xs text-gray-500">disconnected</span>
+    <div class="flex items-center gap-2">
+      <span id="status" class="text-xs text-gray-500">disconnected</span>
+      <button id="change-token" class="text-xs text-gray-600 hover:text-gray-400" title="Change auth token">&#128273;</button>
+    </div>
   </div>
 
   <!-- Messages -->
@@ -49,14 +52,29 @@
   </div>
 
   <script>
-    const TOKEN = localStorage.getItem('miniclaw-token') || prompt('Auth token:');
-    if (TOKEN) localStorage.setItem('miniclaw-token', TOKEN);
+    let TOKEN = localStorage.getItem('miniclaw-token');
+    if (!TOKEN) TOKEN = promptForToken();
+
+    function promptForToken() {
+      const t = prompt('Auth token:');
+      if (t) localStorage.setItem('miniclaw-token', t);
+      return t;
+    }
+
+    function changeToken() {
+      localStorage.removeItem('miniclaw-token');
+      if (ws) ws.close();
+      TOKEN = promptForToken();
+      if (TOKEN) { loadHistory(); connect(); }
+    }
 
     const messagesEl = document.getElementById('messages');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
     const statusEl = document.getElementById('status');
     const typingEl = document.getElementById('typing');
+
+    document.getElementById('change-token').addEventListener('click', changeToken);
 
     let ws = null;
     let streamEl = null;
@@ -77,18 +95,31 @@
     }
 
     // --- WebSocket ---
+    let wasConnected = false;
     function connect() {
+      if (!TOKEN) return;
+      wasConnected = false;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${TOKEN}`);
 
       ws.onopen = () => {
+        wasConnected = true;
         statusEl.textContent = 'connected';
         statusEl.className = 'text-xs text-green-500';
       };
 
       ws.onclose = () => {
+        if (!wasConnected) {
+          // Never connected — likely bad token
+          statusEl.textContent = 'invalid token';
+          statusEl.className = 'text-xs text-red-500 cursor-pointer';
+          statusEl.onclick = changeToken;
+          localStorage.removeItem('miniclaw-token');
+          return; // Don't auto-reconnect with bad token
+        }
         statusEl.textContent = 'disconnected';
         statusEl.className = 'text-xs text-red-500';
+        statusEl.onclick = null;
         setTimeout(connect, 3000);
       };
 
