@@ -1,0 +1,194 @@
+import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
+import { runClaude, getQueueLength } from './lib/claude.js';
+import { appendMessage, readMessages } from './lib/log.js';
+import { sendReply, validateTwilioWebhook } from './lib/channels.js';
+import { startScheduler, stopScheduler } from './lib/cron.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// --- Init ---
+
+const config = loadConfig();
+ensureRuntimeDirs();
+
+const app = express();
+const server = createServer(app);
+const wss = new WebSocketServer({ noServer: true });
+
+const startTime = Date.now();
+
+// --- Auth ---
+
+function checkAuth(req) {
+  const token = req.headers.authorization?.replace('Bearer ', '') ||
+                req.query.token;
+  return token === config.auth.token;
+}
+
+// --- WebSocket ---
+
+const clients = new Set();
+
+wss.on('connection', (ws) => {
+  clients.add(ws);
+  ws.on('close', () => clients.delete(ws));
+
+  ws.on('message', async (data) => {
+    try {
+      const msg = JSON.parse(data);
+      if (msg.type === 'message' && msg.content) {
+        await handleMessage('web', msg.content, {});
+      }
+    } catch (err) {
+      ws.send(JSON.stringify({ type: 'error', message: err.message }));
+    }
+  });
+});
+
+server.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname !== '/ws') {
+    socket.destroy();
+    return;
+  }
+
+  const token = url.searchParams.get('token');
+  if (token !== config.auth.token) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    wss.emit('connection', ws, req);
+  });
+});
+
+function broadcast(data) {
+  const msg = JSON.stringify(data);
+  for (const ws of clients) {
+    if (ws.readyState === 1) ws.send(msg);
+  }
+}
+
+// --- HTTP Routes ---
+
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+app.use(express.static(join(__dirname, 'public')));
+
+app.get('/api/messages', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const limit = parseInt(req.query.limit) || 100;
+  const after = req.query.after || null;
+  res.json(readMessages({ limit, after }));
+});
+
+app.post('/twilio-sms/webhook', async (req, res) => {
+  const result = validateTwilioWebhook(req);
+  if (!result.valid) {
+    console.log(`[sms] Rejected: ${result.reason}`);
+    return res.status(403).send('');
+  }
+
+  // Respond immediately with empty TwiML (we reply async via API)
+  res.type('text/xml').send('<Response/>');
+
+  try {
+    await handleMessage('sms', result.body, { from: result.from });
+  } catch (err) {
+    console.error('[sms] Error handling message:', err.message);
+  }
+});
+
+app.get('/health', (req, res) => {
+  res.json({
+    ok: true,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    queueLength: getQueueLength(),
+  });
+});
+
+// --- Core Orchestration ---
+
+async function handleMessage(channel, content, meta = {}) {
+  // 1. Log the incoming user message
+  const msgId = appendMessage('user', channel, content, meta);
+
+  // 2. Broadcast to web UI
+  broadcast({
+    type: 'message',
+    role: 'user',
+    channel,
+    content,
+    id: msgId,
+    ts: new Date().toISOString(),
+  });
+
+  // 3. Run Claude with streaming
+  let fullResponse = '';
+  broadcast({ type: 'typing', active: true });
+
+  try {
+    const result = await runClaude({
+      prompt: content,
+      channel,
+      model: meta.model || null,
+      timeout: meta.timeout || 300000,
+      isolated: meta.isolated || false,
+      onDelta: (text) => {
+        fullResponse += text;
+        broadcast({ type: 'delta', text });
+      },
+    });
+
+    fullResponse = result.content || fullResponse;
+  } catch (err) {
+    fullResponse = `Error: ${err.message}`;
+    console.error(`[claude] Error:`, err.message);
+  }
+
+  broadcast({ type: 'typing', active: false });
+
+  // 4. Log the assistant response
+  appendMessage('assistant', channel, fullResponse, { inReplyTo: msgId });
+
+  // 5. Tell web UI streaming is done (client finalizes the streamed message)
+  broadcast({ type: 'stream_end', channel, content: fullResponse });
+
+  // 6. Route response to originating channel
+  await sendReply(channel, fullResponse, meta);
+
+  return fullResponse;
+}
+
+// --- Start ---
+
+startScheduler(handleMessage);
+
+server.listen(config.port, () => {
+  console.log(`[miniclaw] Listening on port ${config.port}`);
+  console.log(`[miniclaw] Workspace: ${config.workspacePath}`);
+});
+
+// --- Graceful Shutdown ---
+
+function shutdown(signal) {
+  console.log(`[miniclaw] ${signal} received, shutting down...`);
+  stopScheduler();
+  server.close(() => {
+    console.log('[miniclaw] Server closed');
+    process.exit(0);
+  });
+  // Force exit after 30s
+  setTimeout(() => process.exit(1), 30000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
