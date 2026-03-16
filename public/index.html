@@ -33,10 +33,16 @@
     .md-content blockquote { border-left: 3px solid #475569; padding-left: 0.75em; margin: 0.5em 0; color: #94a3b8; }
     .md-content strong { color: #f1f5f9; }
     .md-content hr { border-color: #334155; margin: 0.75em 0; }
-    .tool-block { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; margin: 4px 0; font-size: 0.75rem; font-family: monospace; color: #8b949e; max-width: 40rem; }
-    .tool-block .tool-name { color: #58a6ff; font-weight: 600; }
-    .tool-block .tool-input { color: #c9d1d9; margin-top: 2px; }
-    .tool-block .tool-output { color: #7ee787; margin-top: 2px; white-space: pre-wrap; word-break: break-all; }
+    .tool-panel { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; margin: 4px 0; max-width: 40rem; font-size: 0.75rem; font-family: monospace; overflow: hidden; }
+    .tool-panel-header { padding: 4px 10px; color: #58a6ff; cursor: pointer; display: flex; justify-content: space-between; user-select: none; }
+    .tool-panel-header:hover { background: #161b22; }
+    .tool-panel-body { max-height: 120px; overflow-y: auto; border-top: 1px solid #30363d; }
+    .tool-panel.collapsed .tool-panel-body { display: none; }
+    .tool-line { padding: 2px 10px; color: #8b949e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .tool-line:hover { background: #161b22; }
+    .tool-line .tl-name { color: #58a6ff; display: inline-block; width: 65px; font-weight: 600; }
+    .tool-line .tl-input { color: #c9d1d9; }
+    .tool-line-detail { padding: 4px 10px 8px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; font-size: 0.7rem; border-top: 1px solid #1e293b; display: none; }
     .typing-dot { animation: blink 1.4s infinite both; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -183,20 +189,34 @@
         }
       } else if (msg.type === 'assistant') {
         if (Array.isArray(content)) {
-          for (const block of content) {
-            if (block.type === 'text' && block.text) {
-              target.appendChild(createMessageEl({ role: 'assistant', channel: 'web', content: block.text }));
-            } else if (block.type === 'tool_use') {
-              const el = document.createElement('div');
-              el.className = 'tool-block';
-              const inputStr = formatToolInput(block.name, block.input);
-              el.innerHTML = `<span class="tool-name">${escapeHtml(block.name)}</span>`;
-              if (inputStr) el.innerHTML += `<div class="tool-input">${escapeHtml(inputStr)}</div>`;
-              target.appendChild(el);
+          // Group consecutive tool_use blocks into panels
+          const groups = groupContentBlocks(content);
+          for (const group of groups) {
+            if (group.type === 'text') {
+              target.appendChild(createMessageEl({ role: 'assistant', channel: 'web', content: group.text }));
+            } else if (group.type === 'tools') {
+              renderToolPanel(target, group.blocks);
             }
           }
         }
       }
+    }
+
+    function groupContentBlocks(blocks) {
+      const groups = [];
+      let toolGroup = null;
+      for (const block of blocks) {
+        if (block.type === 'tool_use') {
+          if (!toolGroup) { toolGroup = { type: 'tools', blocks: [] }; groups.push(toolGroup); }
+          toolGroup.blocks.push(block);
+        } else {
+          toolGroup = null;
+          if (block.type === 'text' && block.text) {
+            groups.push({ type: 'text', text: block.text });
+          }
+        }
+      }
+      return groups;
     }
 
     function formatToolInput(name, input) {
@@ -211,6 +231,61 @@
       if (name === 'Agent') return input.description || '';
       if (name === 'send_sms') return input.message || '';
       return JSON.stringify(input).slice(0, 200);
+    }
+
+    // --- Tool Panels ---
+    let activeToolPanel = null;
+
+    function createToolPanel() {
+      const panel = document.createElement('div');
+      panel.className = 'tool-panel';
+      const header = document.createElement('div');
+      header.className = 'tool-panel-header';
+      header.innerHTML = '<span class="tp-count">0 tool calls</span><span class="tp-toggle">&#9660;</span>';
+      header.addEventListener('click', () => {
+        panel.classList.toggle('collapsed');
+        header.querySelector('.tp-toggle').innerHTML = panel.classList.contains('collapsed') ? '&#9654;' : '&#9660;';
+      });
+      const body = document.createElement('div');
+      body.className = 'tool-panel-body';
+      panel.appendChild(header);
+      panel.appendChild(body);
+      return panel;
+    }
+
+    function addToolLine(panel, name, input) {
+      const body = panel.querySelector('.tool-panel-body');
+      const line = document.createElement('div');
+      line.className = 'tool-line';
+      const truncInput = (input || '').length > 80 ? input.slice(0, 80) + '...' : (input || '');
+      line.innerHTML = `<span class="tl-name">${escapeHtml(name)}</span><span class="tl-input">${escapeHtml(truncInput)}</span>`;
+
+      // Expand on click
+      const detail = document.createElement('div');
+      detail.className = 'tool-line-detail';
+      detail.textContent = input || '';
+
+      line.addEventListener('click', () => {
+        detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+      });
+
+      body.appendChild(line);
+      body.appendChild(detail);
+
+      // Update count
+      const count = body.querySelectorAll('.tool-line').length;
+      panel.querySelector('.tp-count').textContent = `${count} tool call${count !== 1 ? 's' : ''}`;
+
+      // Auto-scroll to latest
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function renderToolPanel(target, toolBlocks) {
+      const panel = createToolPanel();
+      for (const block of toolBlocks) {
+        addToolLine(panel, block.name, formatToolInput(block.name, block.input));
+      }
+      target.appendChild(panel);
     }
 
     // --- WebSocket ---
@@ -258,9 +333,11 @@
             addMessage({ role: 'assistant', channel: data.channel || 'web', content: data.content });
           }
           finalizeStream();
+          activeToolPanel = null;
           queueBadge.classList.add('hidden');
           scrollToBottom();
         } else if (data.type === 'delta') {
+          activeToolPanel = null; // Text started, finalize any tool panel
           if (!streamEl) {
             streamEl = createMessageEl({ role: 'assistant', channel: 'web' });
             messagesEl.appendChild(streamEl);
@@ -270,20 +347,14 @@
           streamEl.querySelector('.content').textContent = streamContent;
           scrollToBottom();
         } else if (data.type === 'tool_start') {
-          const el = document.createElement('div');
-          el.className = 'tool-block';
-          el.id = 'tool-active';
-          el.innerHTML = `<span class="tool-name">${escapeHtml(data.name)}</span>`;
-          if (data.input) el.innerHTML += `<div class="tool-input">${escapeHtml(data.input)}</div>`;
-          messagesEl.appendChild(el);
+          if (!activeToolPanel) {
+            activeToolPanel = createToolPanel();
+            messagesEl.appendChild(activeToolPanel);
+          }
+          addToolLine(activeToolPanel, data.name, data.input);
           scrollToBottom();
         } else if (data.type === 'tool_result') {
-          const el = document.getElementById('tool-active');
-          if (el && data.output) {
-            const out = data.output.length > 300 ? data.output.slice(0, 300) + '...' : data.output;
-            el.innerHTML += `<div class="tool-output">${escapeHtml(out)}</div>`;
-          }
-          if (el) el.removeAttribute('id');
+          // Tool result — panel already has the line
           scrollToBottom();
         } else if (data.type === 'typing') {
           typingEl.classList.toggle('hidden', !data.active);
