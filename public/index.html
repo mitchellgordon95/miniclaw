@@ -57,11 +57,13 @@
     <div id="plan-badge" class="hidden text-xs text-yellow-400 mb-1 flex items-center gap-1">
       <span>&#128736;</span> Plan mode <span class="text-gray-500">(shift+tab to toggle)</span>
     </div>
+    <div id="queue-badge" class="hidden text-xs text-blue-400 mb-1">Queued</div>
     <div class="flex gap-2">
       <textarea id="input" rows="1" placeholder="Message Wright..."
         class="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
         autocomplete="off"></textarea>
       <button id="send" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Send</button>
+      <button id="stop" class="hidden bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">Stop</button>
     </div>
   </div>
 
@@ -85,14 +87,17 @@
     const messagesEl = document.getElementById('messages');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
+    const stopBtn = document.getElementById('stop');
     const statusEl = document.getElementById('status');
     const typingEl = document.getElementById('typing');
+    const queueBadge = document.getElementById('queue-badge');
 
     document.getElementById('change-token').addEventListener('click', changeToken);
 
     let ws = null;
     let streamEl = null;
     let streamContent = '';
+    let generating = false;
 
     // --- Load history ---
     async function loadHistory() {
@@ -151,6 +156,7 @@
             addMessage({ role: 'assistant', channel: data.channel || 'web', content: data.content });
           }
           finalizeStream();
+          queueBadge.classList.add('hidden');
           scrollToBottom();
         } else if (data.type === 'delta') {
           if (!streamEl) {
@@ -179,7 +185,11 @@
           scrollToBottom();
         } else if (data.type === 'typing') {
           typingEl.classList.toggle('hidden', !data.active);
+          setGenerating(data.active);
           if (data.active) scrollToBottom();
+        } else if (data.type === 'queued') {
+          queueBadge.textContent = `Queued (position ${data.position})`;
+          queueBadge.classList.remove('hidden');
         } else if (data.type === 'error') {
           addMessage({ role: 'system', channel: 'web', content: `Error: ${data.message}` });
         }
@@ -235,6 +245,22 @@
       return div.innerHTML;
     }
 
+    // --- Stop / Generating State ---
+    function setGenerating(active) {
+      generating = active;
+      sendBtn.classList.toggle('hidden', active);
+      stopBtn.classList.toggle('hidden', !active);
+      if (!active) queueBadge.classList.add('hidden');
+    }
+
+    function stopGeneration() {
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+      }
+    }
+
+    stopBtn.addEventListener('click', stopGeneration);
+
     // --- Plan Mode ---
     let planMode = false;
     const planBadge = document.getElementById('plan-badge');
@@ -265,7 +291,10 @@
     sendBtn.addEventListener('click', send);
     inputEl.addEventListener('input', autoResize);
     inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab' && e.shiftKey) {
+      if (e.key === 'Escape' && generating) {
+        e.preventDefault();
+        stopGeneration();
+      } else if (e.key === 'Tab' && e.shiftKey) {
         e.preventDefault();
         togglePlanMode();
       } else if (e.key === 'Enter' && !e.shiftKey) {

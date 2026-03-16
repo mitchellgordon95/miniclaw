@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { runClaude, getQueueLength, getInitInfo } from './lib/claude.js';
+import { runClaude, getQueueLength, getInitInfo, abortCurrent } from './lib/claude.js';
 import { appendMessage, readMessages } from './lib/log.js';
 import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
@@ -63,6 +63,9 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(data);
       if (msg.type === 'message' && msg.content) {
         await handleMessage('web', msg.content, { planMode: msg.planMode || false });
+      } else if (msg.type === 'stop') {
+        const stopped = abortCurrent();
+        if (stopped) console.log('[web] Generation stopped by user');
       }
     } catch (err) {
       ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -192,6 +195,10 @@ async function handleMessage(channel, content, meta = {}) {
 
   // 2. Run Claude with streaming
   let fullResponse = '';
+  const queueLen = getQueueLength();
+  if (isUserFacing && queueLen > 0) {
+    broadcast({ type: 'queued', position: queueLen });
+  }
   if (isUserFacing) broadcast({ type: 'typing', active: true });
 
   let resultSessionId = null;
