@@ -8,7 +8,7 @@ import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { runClaude, getQueueLength } from './lib/claude.js';
 import { appendMessage, readMessages } from './lib/log.js';
 import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
-import { startScheduler, stopScheduler } from './lib/cron.js';
+import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -139,6 +139,12 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   }
 });
 
+app.get('/api/cron/runs', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const limit = parseInt(req.query.limit) || 50;
+  res.json(readCronRuns(limit));
+});
+
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
@@ -174,6 +180,7 @@ async function handleMessage(channel, content, meta = {}) {
   let fullResponse = '';
   broadcast({ type: 'typing', active: true });
 
+  let resultSessionId = null;
   try {
     const result = await runClaude({
       prompt: content,
@@ -194,6 +201,7 @@ async function handleMessage(channel, content, meta = {}) {
     });
 
     if (!fullResponse) fullResponse = result.content || '';
+    resultSessionId = result.sessionId;
   } catch (err) {
     fullResponse = `Error: ${err.message}`;
     console.error(`[claude] Error:`, err.message);
@@ -210,7 +218,7 @@ async function handleMessage(channel, content, meta = {}) {
   // 6. Route response to originating channel
   await sendReply(channel, fullResponse, { ...meta, lastRoute });
 
-  return fullResponse;
+  return { response: fullResponse, sessionId: resultSessionId };
 }
 
 // --- Start ---

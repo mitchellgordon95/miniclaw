@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiniClaw - Cron</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body { background: #0f172a; color: #e2e8f0; }
+    .status-ok { color: #10b981; }
+    .status-error { color: #ef4444; }
+    .run-row { cursor: pointer; transition: background 0.15s; }
+    .run-row:hover { background: #1e293b; }
+    .response-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; max-height: 400px; overflow-y: auto; }
+  </style>
+</head>
+<body class="h-screen flex flex-col">
+  <!-- Header -->
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+    <div class="flex items-center gap-4">
+      <h1 class="text-lg font-semibold">MiniClaw</h1>
+      <nav class="flex gap-3 text-sm">
+        <a href="/" class="text-gray-400 hover:text-white">Chat</a>
+        <span class="text-blue-400 font-medium">Cron</span>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="flex-1 overflow-y-auto p-4">
+    <div id="runs" class="max-w-4xl mx-auto space-y-1"></div>
+    <div id="empty" class="text-gray-500 text-center py-8 hidden">No cron runs yet</div>
+  </div>
+
+  <script>
+    const TOKEN = localStorage.getItem('miniclaw-token') || prompt('Auth token:');
+    if (TOKEN) localStorage.setItem('miniclaw-token', TOKEN);
+
+    const runsEl = document.getElementById('runs');
+    const emptyEl = document.getElementById('empty');
+
+    async function loadRuns() {
+      try {
+        const res = await fetch(`/api/cron/runs?limit=50&token=${TOKEN}`);
+        if (!res.ok) return;
+        const runs = await res.json();
+
+        if (runs.length === 0) {
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        runsEl.innerHTML = '';
+        for (const run of runs) {
+          const row = document.createElement('div');
+          row.className = 'run-row rounded-lg px-4 py-3';
+
+          const statusClass = run.status === 'ok' ? 'status-ok' : 'status-error';
+          const statusIcon = run.status === 'ok' ? '&#10003;' : '&#10007;';
+          const started = new Date(run.startedAt).toLocaleString();
+          const duration = run.durationMs ? `${(run.durationMs / 1000).toFixed(1)}s` : '?';
+          const preview = (run.response || run.error || '').slice(0, 100);
+
+          row.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="${statusClass} text-lg font-bold">${statusIcon}</span>
+              <span class="font-medium text-sm w-40">${escapeHtml(run.jobName)}</span>
+              <span class="text-xs text-gray-500">${started}</span>
+              <span class="text-xs text-gray-600">${duration}</span>
+              ${run.sessionId ? `<span class="text-xs text-gray-700 font-mono">${run.sessionId.slice(0, 8)}</span>` : ''}
+            </div>
+            ${preview ? `<div class="text-xs text-gray-500 mt-1 truncate pl-8">${escapeHtml(preview)}</div>` : ''}
+          `;
+
+          // Expand on click
+          let expanded = false;
+          row.addEventListener('click', () => {
+            expanded = !expanded;
+            const existing = row.querySelector('.response-box');
+            if (existing) {
+              existing.remove();
+              return;
+            }
+            if (run.response || run.error) {
+              const box = document.createElement('div');
+              box.className = 'response-box mt-2 ml-8';
+              box.textContent = run.response || `Error: ${run.error}`;
+              row.appendChild(box);
+            }
+          });
+
+          runsEl.appendChild(row);
+        }
+      } catch (e) {
+        console.error('Failed to load runs:', e);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    loadRuns();
+    // Refresh every 60s
+    setInterval(loadRuns, 60000);
+  </script>
+</body>
+</html>

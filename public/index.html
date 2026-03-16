@@ -28,7 +28,13 @@
 <body class="h-screen flex flex-col">
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-    <h1 class="text-lg font-semibold">MiniClaw</h1>
+    <div class="flex items-center gap-4">
+      <h1 class="text-lg font-semibold">MiniClaw</h1>
+      <nav class="flex gap-3 text-sm">
+        <span class="text-blue-400 font-medium">Chat</span>
+        <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
+      </nav>
+    </div>
     <div class="flex items-center gap-2">
       <span id="status" class="text-xs text-gray-500">disconnected</span>
       <button id="change-token" class="text-xs text-gray-600 hover:text-gray-400" title="Change auth token">&#128273;</button>
