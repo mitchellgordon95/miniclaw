@@ -23,6 +23,10 @@ const wss = new WebSocketServer({ noServer: true });
 
 const startTime = Date.now();
 
+// --- Last Route (where to auto-reply) ---
+
+let lastRoute = { channel: 'web' };
+
 // --- SMS PIN Auth ---
 
 const smsAuth = new Map(); // phoneNumber -> { authenticatedAt }
@@ -146,6 +150,13 @@ app.get('/health', (req, res) => {
 // --- Core Orchestration ---
 
 async function handleMessage(channel, content, meta = {}) {
+  // Track last route for user-initiated channels
+  if (channel === 'sms') {
+    lastRoute = { channel: 'sms', from: meta.from };
+  } else if (channel === 'web') {
+    lastRoute = { channel: 'web' };
+  }
+
   // 1. Log the incoming user message
   const msgId = appendMessage('user', channel, content, meta);
 
@@ -197,7 +208,7 @@ async function handleMessage(channel, content, meta = {}) {
   broadcast({ type: 'stream_end', channel, content: fullResponse });
 
   // 6. Route response to originating channel
-  await sendReply(channel, fullResponse, meta);
+  await sendReply(channel, fullResponse, { ...meta, lastRoute });
 
   return fullResponse;
 }
