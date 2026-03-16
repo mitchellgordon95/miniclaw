@@ -4,9 +4,9 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
+import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { runClaude, getQueueLength, getInitInfo, abortCurrent } from './lib/claude.js';
-import { appendMessage, readMessages } from './lib/log.js';
+import { runClaude, getQueueLength, getInitInfo, getSessionId, abortCurrent } from './lib/claude.js';
 import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
@@ -27,9 +27,6 @@ const startTime = Date.now();
 
 let lastRoute = { channel: 'web' };
 
-// --- In-flight response (for reload recovery) ---
-
-let inFlight = null; // { channel, content, ts }
 
 // --- SMS PIN Auth ---
 
@@ -109,16 +106,22 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
-app.get('/api/messages', (req, res) => {
+app.get('/api/messages', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  const limit = parseInt(req.query.limit) || 100;
-  const after = req.query.after || null;
-  const messages = readMessages({ limit, after });
-  // Include in-flight response if one is being streamed
-  if (inFlight && inFlight.content) {
-    messages.push({ role: 'assistant', channel: inFlight.channel, content: inFlight.content, ts: inFlight.ts, partial: true });
+  const sessionId = getSessionId();
+  if (!sessionId) return res.json([]);
+
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const messages = await getSessionMessages(sessionId, {
+      dir: config.workspacePath,
+      limit,
+    });
+    res.json(messages);
+  } catch (err) {
+    console.error('[api] Failed to read session:', err.message);
+    res.json([]);
   }
-  res.json(messages);
 });
 
 app.post('/twilio-sms/webhook', async (req, res) => {
@@ -188,16 +191,13 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'web' };
   }
 
-  // 1. Log the incoming user message (user-facing only)
-  let msgId = null;
+  // 1. Broadcast user message to web UI
   if (isUserFacing) {
-    msgId = appendMessage('user', channel, content, meta);
     broadcast({
       type: 'message',
       role: 'user',
       channel,
       content,
-      id: msgId,
       ts: new Date().toISOString(),
     });
   }
@@ -208,10 +208,7 @@ async function handleMessage(channel, content, meta = {}) {
   if (isUserFacing && queueLen > 0) {
     broadcast({ type: 'queued', position: queueLen });
   }
-  if (isUserFacing) {
-    broadcast({ type: 'typing', active: true });
-    inFlight = { channel, content: '', ts: new Date().toISOString() };
-  }
+  if (isUserFacing) broadcast({ type: 'typing', active: true });
 
   let resultSessionId = null;
   try {
@@ -224,7 +221,6 @@ async function handleMessage(channel, content, meta = {}) {
       planMode: meta.planMode || false,
       onDelta: isUserFacing ? (text) => {
         fullResponse += text;
-        if (inFlight) inFlight.content = fullResponse;
         broadcast({ type: 'delta', text });
       } : (text) => { fullResponse += text; },
       onToolStart: isUserFacing ? (name, input) => {
@@ -243,9 +239,7 @@ async function handleMessage(channel, content, meta = {}) {
   }
 
   if (isUserFacing) {
-    inFlight = null;
     broadcast({ type: 'typing', active: false });
-    appendMessage('assistant', channel, fullResponse, { inReplyTo: msgId });
     broadcast({ type: 'stream_end', channel, content: fullResponse });
   }
 

@@ -99,18 +99,65 @@
     let streamContent = '';
     let generating = false;
 
-    // --- Load history ---
+    // --- Load history from session transcript ---
     async function loadHistory() {
       try {
         const res = await fetch(`/api/messages?limit=100&token=${TOKEN}`);
         if (!res.ok) return;
         const messages = await res.json();
         messagesEl.innerHTML = '';
-        for (const msg of messages) addMessage(msg);
+        for (const msg of messages) renderSessionMessage(msg);
         scrollToBottom();
       } catch (e) {
         console.error('Failed to load history:', e);
       }
+    }
+
+    function renderSessionMessage(msg) {
+      const content = msg.message?.content;
+      if (msg.type === 'user') {
+        // User messages: content is a string or array with text/tool_result blocks
+        if (typeof content === 'string') {
+          addMessage({ role: 'user', channel: 'web', content });
+        } else if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text') {
+              addMessage({ role: 'user', channel: 'web', content: block.text });
+            }
+            // Skip tool_result blocks in history (they're shown with the tool call)
+          }
+        }
+      } else if (msg.type === 'assistant') {
+        // Assistant messages: content is array of text + tool_use blocks
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'text' && block.text) {
+              addMessage({ role: 'assistant', channel: 'web', content: block.text });
+            } else if (block.type === 'tool_use') {
+              const el = document.createElement('div');
+              el.className = 'tool-block';
+              const inputStr = formatToolInput(block.name, block.input);
+              el.innerHTML = `<span class="tool-name">${escapeHtml(block.name)}</span>`;
+              if (inputStr) el.innerHTML += `<div class="tool-input">${escapeHtml(inputStr)}</div>`;
+              messagesEl.appendChild(el);
+            }
+          }
+        }
+      }
+    }
+
+    function formatToolInput(name, input) {
+      if (!input) return '';
+      if (name === 'Bash') return input.command || '';
+      if (name === 'Read') return input.file_path || '';
+      if (name === 'Edit') return input.file_path || '';
+      if (name === 'Write') return input.file_path || '';
+      if (name === 'Glob') return input.pattern || '';
+      if (name === 'Grep') return input.pattern || '';
+      if (name === 'Skill') return input.skill || '';
+      if (name === 'Agent') return input.description || '';
+      if (name === 'send_sms') return input.message || '';
+      return JSON.stringify(input).slice(0, 200);
     }
 
     // --- WebSocket ---
