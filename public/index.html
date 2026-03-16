@@ -35,7 +35,8 @@
         <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
       </nav>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-3">
+      <span id="model-info" class="text-xs text-gray-600"></span>
       <span id="status" class="text-xs text-gray-500">disconnected</span>
       <button id="change-token" class="text-xs text-gray-600 hover:text-gray-400" title="Change auth token">&#128273;</button>
     </div>
@@ -247,8 +248,24 @@
       }
     });
 
+    // --- Status ---
+    async function loadStatus() {
+      try {
+        const res = await fetch(`/api/status?token=${TOKEN}`);
+        if (!res.ok) return;
+        const s = await res.json();
+        const modelEl = document.getElementById('model-info');
+        const model = (s.model || '').replace('claude-', '').replace(/-\d+$/, '');
+        const auth = s.apiKeySource === 'none' ? 'max' : s.apiKeySource || '?';
+        modelEl.textContent = `${model} | ${auth}`;
+        modelEl.className = 'text-xs ' + (auth === 'max' ? 'text-green-600' : 'text-yellow-500');
+      } catch {}
+    }
+
     // --- Init ---
     loadHistory();
+    loadStatus();
+    setInterval(loadStatus, 30000);
     connect();
     inputEl.focus();
   </script>

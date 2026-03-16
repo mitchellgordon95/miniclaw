@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { runClaude, getQueueLength } from './lib/claude.js';
+import { runClaude, getQueueLength, getInitInfo } from './lib/claude.js';
 import { appendMessage, readMessages } from './lib/log.js';
 import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
@@ -143,6 +143,17 @@ app.get('/api/cron/runs', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const limit = parseInt(req.query.limit) || 50;
   res.json(readCronRuns(limit));
+});
+
+app.get('/api/status', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const init = getInitInfo();
+  res.json({
+    model: init.model,
+    apiKeySource: init.apiKeySource,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    queueLength: getQueueLength(),
+  });
 });
 
 app.get('/health', (req, res) => {
