@@ -156,6 +156,8 @@ app.get('/health', (req, res) => {
 // --- Core Orchestration ---
 
 async function handleMessage(channel, content, meta = {}) {
+  const isUserFacing = channel === 'web' || channel === 'sms';
+
   // Track last route for user-initiated channels
   if (channel === 'sms') {
     lastRoute = { channel: 'sms', from: meta.from };
@@ -163,22 +165,23 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'web' };
   }
 
-  // 1. Log the incoming user message
-  const msgId = appendMessage('user', channel, content, meta);
+  // 1. Log the incoming user message (user-facing only)
+  let msgId = null;
+  if (isUserFacing) {
+    msgId = appendMessage('user', channel, content, meta);
+    broadcast({
+      type: 'message',
+      role: 'user',
+      channel,
+      content,
+      id: msgId,
+      ts: new Date().toISOString(),
+    });
+  }
 
-  // 2. Broadcast to web UI
-  broadcast({
-    type: 'message',
-    role: 'user',
-    channel,
-    content,
-    id: msgId,
-    ts: new Date().toISOString(),
-  });
-
-  // 3. Run Claude with streaming
+  // 2. Run Claude with streaming
   let fullResponse = '';
-  broadcast({ type: 'typing', active: true });
+  if (isUserFacing) broadcast({ type: 'typing', active: true });
 
   let resultSessionId = null;
   try {
@@ -188,16 +191,16 @@ async function handleMessage(channel, content, meta = {}) {
       model: meta.model || null,
       timeout: meta.timeout || 300000,
       isolated: meta.isolated || false,
-      onDelta: (text) => {
+      onDelta: isUserFacing ? (text) => {
         fullResponse += text;
         broadcast({ type: 'delta', text });
-      },
-      onToolStart: (name, input) => {
+      } : (text) => { fullResponse += text; },
+      onToolStart: isUserFacing ? (name, input) => {
         broadcast({ type: 'tool_start', name, input });
-      },
-      onToolResult: (output) => {
+      } : null,
+      onToolResult: isUserFacing ? (output) => {
         broadcast({ type: 'tool_result', output });
-      },
+      } : null,
     });
 
     if (!fullResponse) fullResponse = result.content || '';
@@ -207,15 +210,13 @@ async function handleMessage(channel, content, meta = {}) {
     console.error(`[claude] Error:`, err.message);
   }
 
-  broadcast({ type: 'typing', active: false });
+  if (isUserFacing) {
+    broadcast({ type: 'typing', active: false });
+    appendMessage('assistant', channel, fullResponse, { inReplyTo: msgId });
+    broadcast({ type: 'stream_end', channel, content: fullResponse });
+  }
 
-  // 4. Log the assistant response
-  appendMessage('assistant', channel, fullResponse, { inReplyTo: msgId });
-
-  // 5. Tell web UI streaming is done (client finalizes the streamed message)
-  broadcast({ type: 'stream_end', channel, content: fullResponse });
-
-  // 6. Route response to originating channel
+  // Route response to originating channel
   await sendReply(channel, fullResponse, { ...meta, lastRoute });
 
   return { response: fullResponse, sessionId: resultSessionId };
