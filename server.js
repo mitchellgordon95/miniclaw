@@ -176,7 +176,7 @@ async function handleMessage(channel, content, meta = {}) {
       },
     });
 
-    fullResponse = result.content || fullResponse;
+    if (!fullResponse) fullResponse = result.content || '';
   } catch (err) {
     fullResponse = `Error: ${err.message}`;
     console.error(`[claude] Error:`, err.message);
