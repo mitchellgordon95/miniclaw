@@ -32,6 +32,26 @@
     .item-card { background: #1e293b; border-radius: 8px; overflow: hidden; transition: all 0.15s; }
     .item-card:hover { background: #1e3048; }
     .feedback-thread { border-left: 2px solid #475569; }
+    .action-btn { position: relative; }
+    .action-desc {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.7rem;
+      color: #94a3b8;
+      white-space: nowrap;
+      max-width: 280px;
+      white-space: normal;
+      z-index: 10;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+    .action-btn:hover .action-desc { display: block; }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -72,124 +92,130 @@
 
     filterEl.addEventListener('change', loadOutbox);
 
-    // --- Type renderers ---
+    // --- Renderer cache ---
 
-    const typeRenderers = {
-      'email': renderEmail,
-      'social-post': renderSocialPost,
-      'config-change': renderConfigChange,
+    const rendererCache = {}; // type -> { render, actions } or null (404)
+
+    async function getRenderer(type) {
+      if (type in rendererCache) return rendererCache[type];
+      try {
+        const res = await fetch(`/api/outbox/types/${encodeURIComponent(type)}?token=${TOKEN}`);
+        if (!res.ok) { rendererCache[type] = null; return null; }
+        const code = await res.text();
+        // Each renderer file is an object literal wrapped in parens: ({render(){...}, actions(){...}})
+        const renderer = new Function(`return ${code}`)();
+        rendererCache[type] = renderer;
+        return renderer;
+      } catch (e) {
+        console.warn(`No renderer for type ${type}:`, e);
+        rendererCache[type] = null;
+        return null;
+      }
+    }
+
+    // --- Helpers passed to renderers ---
+
+    const helpers = {
+      esc(text) {
+        const div = document.createElement('div');
+        div.textContent = String(text || '');
+        return div.innerHTML;
+      },
+      md(text) {
+        return marked.parse(text || '', { breaks: true });
+      },
     };
 
-    function renderEmail(item) {
-      const meta = item.metadata || {};
-      const recipients = (meta.recipients || []).join(', ') || 'unknown';
-      const sender = meta.sender || 'Wright';
-      return `
-        <div class="flex gap-4 text-xs text-gray-400 mb-2">
-          <span>To: <span class="text-gray-200">${escapeHtml(recipients)}</span></span>
-          <span>From: <span class="text-gray-200">${escapeHtml(sender)}</span></span>
-        </div>
-        ${item.content ? `<div class="md-content mt-2 bg-gray-900 rounded p-3">${renderMarkdown(item.content)}</div>` : ''}
-        ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${escapeHtml(item.reviewPath)}</span></div>` : ''}
-      `;
-    }
+    // --- Default renderer (fallback) ---
 
-    function renderSocialPost(item) {
-      const meta = item.metadata || {};
-      const platform = meta.platform || 'unknown';
-      const platformColors = { reddit: '#ff4500', hackernews: '#ff6600', twitter: '#1da1f2', discord: '#5865f2' };
-      const color = platformColors[platform] || '#6b7280';
-      return `
-        <div class="flex items-center gap-2 text-xs mb-2">
-          <span class="px-2 py-0.5 rounded font-medium" style="background:${color}20;color:${color}">${escapeHtml(platform)}</span>
-          ${meta.subreddit ? `<span class="text-gray-400">r/${escapeHtml(meta.subreddit)}</span>` : ''}
-          ${meta.thread ? `<a href="${escapeHtml(meta.thread)}" target="_blank" class="text-blue-400 hover:underline truncate max-w-xs">thread</a>` : ''}
-          ${meta.sender ? `<span class="text-gray-500">posted by ${escapeHtml(meta.sender)}</span>` : ''}
-        </div>
-        ${item.content ? `<div class="md-content mt-2 bg-gray-900 rounded p-3">${renderMarkdown(item.content)}</div>` : ''}
-        ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${escapeHtml(item.reviewPath)}</span></div>` : ''}
-      `;
-    }
-
-    function renderConfigChange(item) {
-      const meta = item.metadata || {};
-      const service = meta.service || 'unknown';
-      const changes = meta.changes || [];
-      return `
-        <div class="flex items-center gap-2 text-xs mb-2">
-          <span class="text-gray-400">Service:</span>
-          <span class="text-purple-400 font-medium">${escapeHtml(service)}</span>
-        </div>
-        ${changes.length ? `<div class="flex flex-wrap gap-1 mb-2">${changes.map(c => `<span class="text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
-        ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${escapeHtml(item.reviewPath)}</span></div>` : ''}
-      `;
-    }
-
-    function renderDefault(item) {
-      return `
-        ${item.content ? `<div class="md-content mt-2 bg-gray-900 rounded p-3">${renderMarkdown(item.content)}</div>` : ''}
-        ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${escapeHtml(item.reviewPath)}</span></div>` : ''}
-      `;
-    }
+    const defaultRenderer = {
+      render(item, h) {
+        return `
+          ${item.content ? `<div class="md-content mt-2 bg-gray-900 rounded p-3">${h.md(item.content)}</div>` : ''}
+          ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${h.esc(item.reviewPath)}</span></div>` : ''}
+        `;
+      },
+      actions(item) {
+        if (item.status !== 'pending') return [];
+        return [
+          { id: 'approve', label: 'Approve', description: 'Approve this item.', style: 'bg-green-700 hover:bg-green-600', action: 'approve' },
+          { id: 'reject', label: 'Reject', description: 'Reject this item.', style: 'bg-red-800 hover:bg-red-700', action: 'reject' },
+        ];
+      },
+    };
 
     // --- Item card ---
 
-    function createItemCard(item) {
+    async function createItemCard(item) {
+      const renderer = (await getRenderer(item.type)) || defaultRenderer;
+
       const card = document.createElement('div');
-      const typeClass = `type-${item.type}` in document.createElement('div').style ? 'type-default' : `type-${item.type}`;
       const validTypes = ['email', 'social-post', 'config-change'];
       card.className = `item-card ${validTypes.includes(item.type) ? 'type-' + item.type : 'type-default'} p-4`;
 
       const statusBadge = `badge-${item.status || 'pending'}`;
       const created = item.created ? new Date(item.created).toLocaleDateString() : '';
-      const renderer = typeRenderers[item.type] || renderDefault;
+      const typeContent = renderer.render(item, helpers);
 
       card.innerHTML = `
         <div class="flex items-start justify-between mb-2">
           <div>
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${escapeHtml(item.status || 'pending')}</span>
-              <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${escapeHtml(item.type || 'unknown')}</span>
+              <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
+              <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type || 'unknown')}</span>
               <span class="text-xs text-gray-600">${created}</span>
             </div>
-            <h3 class="font-medium text-sm text-gray-100">${escapeHtml(item.title || item.id)}</h3>
+            <h3 class="font-medium text-sm text-gray-100">${helpers.esc(item.title || item.id)}</h3>
           </div>
         </div>
-        <p class="text-sm text-gray-400 mb-3">${escapeHtml(item.description || '')}</p>
-        <div class="type-content">${renderer(item)}</div>
+        <p class="text-sm text-gray-400 mb-3">${helpers.esc(item.description || '')}</p>
+        <div class="type-content">${typeContent}</div>
         ${renderFeedbackThread(item)}
         <div class="actions mt-3 pt-3 border-t border-gray-700"></div>
       `;
 
       const actionsEl = card.querySelector('.actions');
+
       if (item.status === 'pending') {
-        actionsEl.innerHTML = `
-          <div class="flex items-center gap-2">
-            <button class="btn-approve bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1.5 rounded font-medium">Approve</button>
-            <button class="btn-reject bg-red-800 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded font-medium">Reject</button>
-            <div class="flex-1 flex gap-2">
-              <input class="feedback-input flex-1 bg-gray-800 text-white text-xs rounded px-3 py-1.5 border border-gray-600 placeholder-gray-500" placeholder="Feedback...">
-              <button class="btn-feedback bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded font-medium">Send</button>
-            </div>
-          </div>
+        const actionBtns = renderer.actions(item);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'flex items-center gap-2 flex-wrap';
+
+        for (const btn of actionBtns) {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'action-btn';
+          wrapper.innerHTML = `
+            <button class="${btn.style} text-white text-xs px-3 py-1.5 rounded font-medium">${helpers.esc(btn.label)}</button>
+            ${btn.description ? `<div class="action-desc">${helpers.esc(btn.description)}</div>` : ''}
+          `;
+          wrapper.querySelector('button').addEventListener('click', () => doAction(item.id, btn.action, card));
+          btnRow.appendChild(wrapper);
+        }
+
+        // Feedback input always available for pending items
+        const feedbackGroup = document.createElement('div');
+        feedbackGroup.className = 'flex-1 flex gap-2 min-w-0';
+        feedbackGroup.innerHTML = `
+          <input class="feedback-input flex-1 bg-gray-800 text-white text-xs rounded px-3 py-1.5 border border-gray-600 placeholder-gray-500" placeholder="Feedback...">
+          <button class="btn-feedback bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded font-medium">Send</button>
         `;
-        actionsEl.querySelector('.btn-approve').addEventListener('click', () => doAction(item.id, 'approve', card));
-        actionsEl.querySelector('.btn-reject').addEventListener('click', () => doAction(item.id, 'reject', card));
-        actionsEl.querySelector('.btn-feedback').addEventListener('click', () => {
-          const input = actionsEl.querySelector('.feedback-input');
+        feedbackGroup.querySelector('.btn-feedback').addEventListener('click', () => {
+          const input = feedbackGroup.querySelector('.feedback-input');
           if (input.value.trim()) {
             doAction(item.id, 'feedback', card, input.value.trim());
             input.value = '';
           }
         });
-        actionsEl.querySelector('.feedback-input').addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            actionsEl.querySelector('.btn-feedback').click();
-          }
+        feedbackGroup.querySelector('.feedback-input').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); feedbackGroup.querySelector('.btn-feedback').click(); }
         });
+
+        btnRow.appendChild(feedbackGroup);
+        actionsEl.appendChild(btnRow);
       } else {
-        actionsEl.innerHTML = `<span class="text-xs text-gray-600">${item.status === 'approved' ? 'Approved' : item.status === 'rejected' ? 'Rejected' : item.status === 'sent' ? 'Sent' : item.status} ${item.approvedAt || item.rejectedAt || ''}</span>`;
+        const ts = item.approvedAt || item.rejectedAt || '';
+        actionsEl.innerHTML = `<span class="text-xs text-gray-600">${helpers.esc(item.status)} ${ts ? new Date(ts).toLocaleString() : ''}</span>`;
       }
 
       return card;
@@ -199,7 +225,7 @@
       if (!item.feedback || item.feedback.length === 0) return '';
       const entries = item.feedback.map(f => {
         const ts = f.ts ? new Date(f.ts).toLocaleString() : '';
-        return `<div class="py-1"><span class="text-xs text-gray-500">${ts}</span> <span class="text-xs text-gray-300">${escapeHtml(f.text)}</span></div>`;
+        return `<div class="py-1"><span class="text-xs text-gray-500">${ts}</span> <span class="text-xs text-gray-300">${helpers.esc(f.text)}</span></div>`;
       }).join('');
       return `<div class="feedback-thread mt-2 pl-3 ml-1">${entries}</div>`;
     }
@@ -214,7 +240,6 @@
           body: JSON.stringify({ action, feedback }),
         });
         if (!res.ok) throw new Error('Failed');
-        // Reload to reflect changes
         loadOutbox();
       } catch (e) {
         console.error('Action failed:', e);
@@ -239,23 +264,11 @@
         emptyEl.classList.add('hidden');
 
         for (const item of data.items) {
-          itemsEl.appendChild(createItemCard(item));
+          itemsEl.appendChild(await createItemCard(item));
         }
       } catch (e) {
         console.error('Failed to load outbox:', e);
       }
-    }
-
-    // --- Helpers ---
-
-    function renderMarkdown(text) {
-      return marked.parse(text || '', { breaks: true });
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
 
     loadOutbox();

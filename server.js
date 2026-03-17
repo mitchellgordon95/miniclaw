@@ -219,6 +219,17 @@ app.post('/api/outbox/:id/action', (req, res) => {
   res.json({ ok: true, item });
 });
 
+app.get('/api/outbox/types/:type', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const typePath = join(config.workspacePath, 'data/outbox-types', `${req.params.type}.js`);
+  try {
+    const content = readFileSync(typePath, 'utf8');
+    res.type('application/javascript').send(content);
+  } catch {
+    res.status(404).json({ error: 'no custom renderer' });
+  }
+});
+
 app.get('/api/status', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const init = getInitInfo();

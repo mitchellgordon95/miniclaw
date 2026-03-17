@@ -310,30 +310,31 @@
     }
 
     // --- WebSocket ---
-    let wasConnected = false;
+    let everConnected = false;
     function connect() {
       if (!TOKEN) return;
-      wasConnected = false;
+      let thisConnected = false;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${TOKEN}`);
 
       ws.onopen = () => {
-        wasConnected = true;
+        thisConnected = true;
+        everConnected = true;
         statusEl.textContent = 'connected';
         statusEl.className = 'text-xs text-green-500';
       };
 
       ws.onclose = () => {
-        if (!wasConnected) {
-          // Never connected — likely bad token
+        if (!thisConnected && !everConnected) {
+          // Never connected in this page session — likely bad token
           statusEl.textContent = 'invalid token';
           statusEl.className = 'text-xs text-red-500 cursor-pointer';
           statusEl.onclick = changeToken;
           localStorage.removeItem('miniclaw-token');
-          return; // Don't auto-reconnect with bad token
+          return;
         }
-        statusEl.textContent = 'disconnected';
-        statusEl.className = 'text-xs text-red-500';
+        statusEl.textContent = 'reconnecting...';
+        statusEl.className = 'text-xs text-yellow-500';
         statusEl.onclick = null;
         setTimeout(connect, 3000);
       };
@@ -356,6 +357,7 @@
           finalizeStream();
           activeToolPanel = null;
           queueBadge.classList.add('hidden');
+          playDoneSound();
           scrollToBottom();
         } else if (data.type === 'delta') {
           activeToolPanel = null; // Text started, finalize any tool panel
@@ -469,6 +471,23 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // --- Notification Sound ---
+    function playDoneSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(660, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+      } catch {}
     }
 
     // --- Stop / Generating State ---
