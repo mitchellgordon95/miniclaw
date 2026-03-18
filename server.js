@@ -32,6 +32,7 @@ let lastRoute = { channel: 'web' };
 // --- SMS PIN Auth ---
 
 const smsAuth = new Map(); // phoneNumber -> { authenticatedAt }
+const smsPending = new Map(); // phoneNumber -> { body, from, receivedAt }
 const SMS_AUTH_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 function isSmsAuthenticated(phoneNumber) {
@@ -147,11 +148,24 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   if (config.twilio.pin && !isSmsAuthenticated(result.from)) {
     if (result.body.trim() === config.twilio.pin) {
       smsAuth.set(result.from, { authenticatedAt: Date.now() });
-      await sendSMS(result.from, 'Authenticated.');
-      console.log(`[sms] PIN accepted from ${result.from}`);
+      const pending = smsPending.get(result.from);
+      smsPending.delete(result.from);
+      if (pending) {
+        await sendSMS(result.from, 'Authenticated. Processing your message.');
+        console.log(`[sms] PIN accepted from ${result.from}, replaying queued message`);
+        try {
+          await handleMessage('sms', pending.body, { from: result.from });
+        } catch (err) {
+          console.error('[sms] Error handling queued message:', err.message);
+        }
+      } else {
+        await sendSMS(result.from, 'Authenticated.');
+        console.log(`[sms] PIN accepted from ${result.from}`);
+      }
     } else {
-      await sendSMS(result.from, 'PIN required.');
-      console.log(`[sms] PIN rejected from ${result.from}`);
+      smsPending.set(result.from, { body: result.body, from: result.from, receivedAt: Date.now() });
+      await sendSMS(result.from, 'PIN required. Your message has been saved and will be sent after auth.');
+      console.log(`[sms] PIN required for ${result.from}, message queued`);
     }
     return;
   }
@@ -288,7 +302,6 @@ async function handleMessage(channel, content, meta = {}) {
       channel,
       model: meta.model || null,
       timeout: meta.timeout || 300000,
-      isolated: meta.isolated || false,
       planMode: meta.planMode || false,
       onDelta: isUserFacing ? (text) => {
         fullResponse += text;
@@ -328,7 +341,7 @@ async function handleMessage(channel, content, meta = {}) {
 
 // --- Start ---
 
-startScheduler(handleMessage);
+startScheduler();
 
 server.listen(config.port, () => {
   console.log(`[miniclaw] Listening on port ${config.port}`);
