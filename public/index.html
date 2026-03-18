@@ -46,6 +46,25 @@
     .plan-card { background: #1a1a2e; border: 1px solid #f59e0b; border-radius: 8px; margin: 8px 0; max-width: 40rem; overflow: hidden; }
     .plan-card-header { padding: 6px 12px; color: #f59e0b; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid #f59e0b33; }
     .plan-card-body { padding: 12px; max-height: 300px; overflow-y: auto; }
+    .question-card { background: #1a1a2e; border: 1px solid #6366f1; border-radius: 8px; margin: 8px 0; max-width: 40rem; overflow: hidden; }
+    .question-card-header { padding: 6px 12px; color: #a5b4fc; font-weight: 600; font-size: 0.8rem; border-bottom: 1px solid #6366f133; display: flex; align-items: center; gap: 6px; }
+    .question-card-body { padding: 12px; }
+    .question-text { color: #e2e8f0; margin-bottom: 8px; font-size: 0.875rem; }
+    .question-option { display: block; width: 100%; text-align: left; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; margin: 4px 0; color: #e2e8f0; cursor: pointer; font-size: 0.8rem; transition: border-color 0.15s, background 0.15s; }
+    .question-option:hover { border-color: #6366f1; background: #1e2940; }
+    .question-option.selected { border-color: #818cf8; background: #2e1065; }
+    .question-option .opt-label { font-weight: 600; }
+    .question-option .opt-desc { color: #94a3b8; margin-left: 6px; }
+    .question-other { display: flex; gap: 6px; margin-top: 6px; }
+    .question-other input { flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; color: #e2e8f0; font-size: 0.8rem; outline: none; }
+    .question-other input:focus { border-color: #6366f1; }
+    .question-other button { background: #6366f1; color: white; border: none; border-radius: 6px; padding: 6px 14px; font-size: 0.8rem; cursor: pointer; }
+    .question-other button:hover { background: #4f46e5; }
+    .question-submit { background: #6366f1; color: white; border: none; border-radius: 6px; padding: 6px 16px; font-size: 0.8rem; cursor: pointer; margin-top: 10px; }
+    .question-submit:hover { background: #4f46e5; }
+    .question-answered { opacity: 0.6; pointer-events: none; }
+    .question-answered .question-option.selected { border-color: #22c55e; background: #14532d; }
+    .question-preview { margin-top: 6px; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; }
     .typing-dot { animation: blink 1.4s infinite both; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -309,6 +328,133 @@
       return card;
     }
 
+    // --- Question Cards (AskUserQuestion) ---
+
+    function createQuestionCard(questions) {
+      const card = document.createElement('div');
+      card.className = 'question-card';
+
+      const header = document.createElement('div');
+      header.className = 'question-card-header';
+      header.innerHTML = '&#10067; Wright has a question';
+      card.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'question-card-body';
+
+      const answers = {};
+      const multiAnswers = {};
+
+      questions.forEach((q, qi) => {
+        const qDiv = document.createElement('div');
+        if (qi > 0) qDiv.style.marginTop = '12px';
+
+        const qText = document.createElement('div');
+        qText.className = 'question-text';
+        qText.textContent = q.question;
+        qDiv.appendChild(qText);
+
+        // Preview pane (shown when an option with preview is selected)
+        const previewPane = document.createElement('div');
+        previewPane.className = 'question-preview';
+        previewPane.style.display = 'none';
+        const hasAnyPreview = q.options.some(o => o.preview);
+
+        q.options.forEach((opt) => {
+          const btn = document.createElement('button');
+          btn.className = 'question-option';
+          btn.innerHTML = `<span class="opt-label">${escapeHtml(opt.label)}</span>` +
+            (opt.description ? `<span class="opt-desc">${escapeHtml(opt.description)}</span>` : '');
+
+          btn.addEventListener('click', () => {
+            if (q.multiSelect) {
+              btn.classList.toggle('selected');
+              if (!multiAnswers[qi]) multiAnswers[qi] = new Set();
+              if (btn.classList.contains('selected')) multiAnswers[qi].add(opt.label);
+              else multiAnswers[qi].delete(opt.label);
+              answers[q.question] = [...(multiAnswers[qi] || [])].join(', ');
+            } else {
+              qDiv.querySelectorAll('.question-option').forEach(b => b.classList.remove('selected'));
+              btn.classList.add('selected');
+              answers[q.question] = opt.label;
+              // Show preview if available
+              if (opt.preview) {
+                previewPane.innerHTML = opt.preview;
+                previewPane.style.display = 'block';
+              } else if (hasAnyPreview) {
+                previewPane.style.display = 'none';
+              }
+              // Auto-submit if single question, single select
+              if (questions.length === 1 && !q.multiSelect) {
+                submitAnswers();
+              }
+            }
+          });
+          qDiv.appendChild(btn);
+        });
+
+        // "Other" free-text input
+        const otherDiv = document.createElement('div');
+        otherDiv.className = 'question-other';
+        const otherInput = document.createElement('input');
+        otherInput.placeholder = 'Other...';
+        const otherBtn = document.createElement('button');
+        otherBtn.textContent = 'OK';
+        otherBtn.addEventListener('click', () => {
+          const val = otherInput.value.trim();
+          if (!val) return;
+          qDiv.querySelectorAll('.question-option').forEach(b => b.classList.remove('selected'));
+          answers[q.question] = val;
+          otherInput.style.borderColor = '#22c55e';
+          if (questions.length === 1) submitAnswers();
+        });
+        otherInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); otherBtn.click(); }
+        });
+        otherDiv.appendChild(otherInput);
+        otherDiv.appendChild(otherBtn);
+        qDiv.appendChild(otherDiv);
+
+        if (hasAnyPreview) qDiv.appendChild(previewPane);
+        body.appendChild(qDiv);
+      });
+
+      // Submit button for multi-question or multiSelect
+      if (questions.length > 1 || questions.some(q => q.multiSelect)) {
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'question-submit';
+        submitBtn.textContent = 'Submit';
+        submitBtn.addEventListener('click', submitAnswers);
+        body.appendChild(submitBtn);
+      }
+
+      card.appendChild(body);
+
+      function submitAnswers() {
+        // Ensure all questions have answers
+        for (const q of questions) {
+          if (!answers[q.question]) {
+            answers[q.question] = q.options[0]?.label || '';
+          }
+        }
+        // Collapse to just show the selected answers
+        body.innerHTML = '';
+        for (const q of questions) {
+          const ansDiv = document.createElement('div');
+          ansDiv.style.cssText = 'font-size:0.8rem;color:#a5b4fc;padding:2px 0;';
+          ansDiv.innerHTML = `<span style="color:#94a3b8">${escapeHtml(q.question)}</span> <span style="color:#e2e8f0;font-weight:600">${escapeHtml(answers[q.question])}</span>`;
+          body.appendChild(ansDiv);
+        }
+        card.classList.add('question-answered');
+        header.innerHTML = '&#9989; Answered';
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'answer', answers }));
+        }
+      }
+
+      return card;
+    }
+
     // --- WebSocket ---
     let everConnected = false;
     function connect() {
@@ -410,6 +556,12 @@
         } else if (data.type === 'queued') {
           queueBadge.textContent = `Queued (position ${data.position})`;
           queueBadge.classList.remove('hidden');
+        } else if (data.type === 'ask_user') {
+          activeToolPanel = null;
+          const card = createQuestionCard(data.questions);
+          messagesEl.appendChild(card);
+          playDoneSound();
+          scrollToBottom();
         } else if (data.type === 'error') {
           addMessage({ role: 'system', channel: 'web', content: `Error: ${data.message}` });
         }

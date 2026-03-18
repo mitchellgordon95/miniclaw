@@ -56,6 +56,7 @@ function checkAuth(req) {
 // --- WebSocket ---
 
 const clients = new Set();
+let pendingQuestion = null; // { resolve } for AskUserQuestion
 
 wss.on('connection', (ws) => {
   clients.add(ws);
@@ -69,6 +70,9 @@ wss.on('connection', (ws) => {
       } else if (msg.type === 'stop') {
         const stopped = abortCurrent();
         if (stopped) console.log('[web] Generation stopped by user');
+      } else if (msg.type === 'answer' && pendingQuestion) {
+        pendingQuestion.resolve(msg.answers);
+        pendingQuestion = null;
       }
     } catch (err) {
       ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -318,6 +322,12 @@ async function handleMessage(channel, content, meta = {}) {
       } : null,
       onStatus: isUserFacing ? (status) => {
         broadcast({ type: 'status', status });
+      } : null,
+      onAskUser: isUserFacing ? (input) => {
+        return new Promise((resolve) => {
+          pendingQuestion = { resolve };
+          broadcast({ type: 'ask_user', questions: input.questions });
+        });
       } : null,
     });
 
