@@ -552,7 +552,9 @@
             streamContent = '';
           }
           streamContent += data.text;
-          streamEl.querySelector('.content').textContent = streamContent;
+          const contentEl = streamEl.querySelector('.content');
+          contentEl.className = 'content md-content';
+          contentEl.innerHTML = renderMarkdown(streamContent);
           scrollToBottom();
         } else if (data.type === 'tool_start') {
           if (!activeToolPanel) {
