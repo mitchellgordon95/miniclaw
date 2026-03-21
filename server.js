@@ -158,6 +158,12 @@ events.on('turn_end', async (content) => {
   currentTurnContent = '';
 });
 
+events.on('abort', () => {
+  broadcast({ type: 'typing', active: false });
+  broadcast({ type: 'stream_end', channel: currentTurnChannel, content: currentTurnContent });
+  currentTurnContent = '';
+});
+
 events.on('error', (message) => {
   broadcast({ type: 'typing', active: false });
   broadcast({ type: 'stream_end', channel: 'web', content: `Error: ${message}` });
