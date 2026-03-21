@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync } from 'fs';
 
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { runClaude, getQueueLength, getInitInfo, getSessionId, abortCurrent } from './lib/claude.js';
+import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId } from './lib/claude.js';
 import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
@@ -27,7 +27,6 @@ const startTime = Date.now();
 // --- Last Route (where to auto-reply) ---
 
 let lastRoute = { channel: 'web' };
-
 
 // --- SMS PIN Auth ---
 
@@ -56,7 +55,6 @@ function checkAuth(req) {
 // --- WebSocket ---
 
 const clients = new Set();
-let pendingQuestion = null; // { resolve } for AskUserQuestion
 
 wss.on('connection', (ws) => {
   clients.add(ws);
@@ -70,9 +68,8 @@ wss.on('connection', (ws) => {
       } else if (msg.type === 'stop') {
         const stopped = abortCurrent();
         if (stopped) console.log('[web] Generation stopped by user');
-      } else if (msg.type === 'answer' && pendingQuestion) {
-        pendingQuestion.resolve(msg.answers);
-        pendingQuestion = null;
+      } else if (msg.type === 'answer') {
+        answerQuestion(msg.answers);
       }
     } catch (err) {
       ws.send(JSON.stringify({ type: 'error', message: err.message }));
@@ -106,6 +103,67 @@ function broadcast(data) {
   }
 }
 
+// --- Wire up Claude events to WebSocket broadcasts ---
+
+let currentTurnContent = '';
+let currentTurnChannel = 'web';
+
+events.on('delta', (text) => {
+  currentTurnContent += text;
+  broadcast({ type: 'delta', text });
+});
+
+events.on('tool_start', (name, input) => {
+  broadcast({ type: 'tool_start', name, input });
+});
+
+events.on('tool_result', (output) => {
+  broadcast({ type: 'tool_result', output });
+});
+
+events.on('plan', (content) => {
+  broadcast({ type: 'plan', content });
+});
+
+events.on('status', (status) => {
+  broadcast({ type: 'status', status });
+});
+
+events.on('agent_start', (id, description) => {
+  broadcast({ type: 'agent_start', id, description });
+});
+
+events.on('agent_done', (id, description) => {
+  broadcast({ type: 'agent_done', id, description });
+});
+
+events.on('ask_user', (questions) => {
+  broadcast({ type: 'ask_user', questions });
+});
+
+events.on('turn_end', async (content) => {
+  const fullResponse = content || currentTurnContent;
+  const channel = currentTurnChannel;
+
+  broadcast({ type: 'typing', active: false });
+  broadcast({ type: 'stream_end', channel, content: fullResponse });
+
+  // Route response to originating channel
+  try {
+    await sendReply(channel, fullResponse, { lastRoute });
+  } catch (err) {
+    console.error('[claude] sendReply error:', err.message);
+  }
+
+  currentTurnContent = '';
+});
+
+events.on('error', (message) => {
+  broadcast({ type: 'typing', active: false });
+  broadcast({ type: 'stream_end', channel: 'web', content: `Error: ${message}` });
+  currentTurnContent = '';
+});
+
 // --- HTTP Routes ---
 
 app.use(express.urlencoded({ extended: false }));
@@ -123,12 +181,12 @@ app.get('/api/messages', async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
 
     if (req.query.offset !== undefined) {
-      // "Load more" — return messages ending at this offset
+      // "Load more" -- return messages ending at this offset
       const end = Math.max(0, parseInt(req.query.offset));
       const start = Math.max(0, end - limit);
       res.json({ messages: all.slice(start, end), total, offset: start });
     } else {
-      // Initial load — return last N
+      // Initial load -- return last N
       const offset = Math.max(0, total - limit);
       res.json({ messages: all.slice(offset), total, offset });
     }
@@ -255,7 +313,6 @@ app.get('/api/status', (req, res) => {
     model: init.model,
     apiKeySource: init.apiKeySource,
     uptime: Math.floor((Date.now() - startTime) / 1000),
-    queueLength: getQueueLength(),
     sessionId: getSessionId(),
   });
 });
@@ -264,7 +321,6 @@ app.get('/health', (req, res) => {
   res.json({
     ok: true,
     uptime: Math.floor((Date.now() - startTime) / 1000),
-    queueLength: getQueueLength(),
   });
 });
 
@@ -280,7 +336,11 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'web' };
   }
 
-  // 1. Broadcast user message to web UI
+  // Track current turn channel for routing responses
+  currentTurnChannel = channel;
+  currentTurnContent = '';
+
+  // Broadcast user message to web UI
   if (isUserFacing) {
     broadcast({
       type: 'message',
@@ -289,64 +349,23 @@ async function handleMessage(channel, content, meta = {}) {
       content,
       ts: new Date().toISOString(),
     });
+    broadcast({ type: 'typing', active: true });
   }
 
-  // 2. Run Claude with streaming
-  let fullResponse = '';
-  const queueLen = getQueueLength();
-  if (isUserFacing && queueLen > 0) {
-    broadcast({ type: 'queued', position: queueLen });
-  }
-  if (isUserFacing) broadcast({ type: 'typing', active: true });
-
-  let resultSessionId = null;
+  // Push message into the persistent session
   try {
-    const result = await runClaude({
-      prompt: content,
+    await sendMessage(content, {
       channel,
-      model: meta.model || null,
-      timeout: meta.timeout || 300000,
       planMode: meta.planMode || false,
-      onDelta: isUserFacing ? (text) => {
-        fullResponse += text;
-        broadcast({ type: 'delta', text });
-      } : (text) => { fullResponse += text; },
-      onToolStart: isUserFacing ? (name, input) => {
-        broadcast({ type: 'tool_start', name, input });
-      } : null,
-      onToolResult: isUserFacing ? (output) => {
-        broadcast({ type: 'tool_result', output });
-      } : null,
-      onPlan: isUserFacing ? (plan) => {
-        broadcast({ type: 'plan', content: plan });
-      } : null,
-      onStatus: isUserFacing ? (status) => {
-        broadcast({ type: 'status', status });
-      } : null,
-      onAskUser: isUserFacing ? (input) => {
-        return new Promise((resolve) => {
-          pendingQuestion = { resolve };
-          broadcast({ type: 'ask_user', questions: input.questions });
-        });
-      } : null,
+      model: meta.model || null,
     });
-
-    if (!fullResponse) fullResponse = result.content || '';
-    resultSessionId = result.sessionId;
   } catch (err) {
-    fullResponse = `Error: ${err.message}`;
     console.error(`[claude] Error:`, err.message);
+    if (isUserFacing) {
+      broadcast({ type: 'typing', active: false });
+      broadcast({ type: 'stream_end', channel, content: `Error: ${err.message}` });
+    }
   }
-
-  if (isUserFacing) {
-    broadcast({ type: 'typing', active: false });
-    broadcast({ type: 'stream_end', channel, content: fullResponse });
-  }
-
-  // Route response to originating channel
-  await sendReply(channel, fullResponse, { ...meta, lastRoute });
-
-  return { response: fullResponse, sessionId: resultSessionId };
 }
 
 // --- Start ---
@@ -363,6 +382,7 @@ server.listen(config.port, () => {
 function shutdown(signal) {
   console.log(`[miniclaw] ${signal} received, shutting down...`);
   stopScheduler();
+  abortCurrent();
   server.close(() => {
     console.log('[miniclaw] Server closed');
     process.exit(0);

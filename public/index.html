@@ -69,6 +69,12 @@
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
     @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+    .agent-bar { background: #1a1a2e; border-top: 1px solid #30363d; padding: 0; overflow: hidden; transition: max-height 0.2s; max-height: 0; }
+    .agent-bar.active { max-height: 200px; padding: 6px 16px; }
+    .agent-chip { display: inline-flex; align-items: center; gap: 6px; background: #1e293b; border: 1px solid #8b5cf6; border-radius: 999px; padding: 3px 10px; margin: 2px 4px; font-size: 0.7rem; color: #c4b5fd; }
+    .agent-chip .agent-dot { width: 6px; height: 6px; border-radius: 50%; background: #8b5cf6; animation: pulse-agent 1.5s infinite; }
+    .agent-chip .agent-time { color: #6d6d8a; font-variant-numeric: tabular-nums; }
+    @keyframes pulse-agent { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -92,6 +98,9 @@
   <!-- Messages -->
   <div id="messages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
 
+  <!-- Active agents bar -->
+  <div id="agent-bar" class="agent-bar"></div>
+
   <!-- Typing indicator -->
   <div id="typing" class="px-4 py-1 text-sm text-gray-500 hidden">
     <span id="typing-dots">
@@ -107,7 +116,6 @@
     <div id="plan-badge" class="hidden text-xs text-yellow-400 mb-1 flex items-center gap-1">
       <span>&#128736;</span> Plan mode <span class="text-gray-500">(shift+tab to toggle)</span>
     </div>
-    <div id="queue-badge" class="hidden text-xs text-blue-400 mb-1">Queued</div>
     <div class="flex gap-2">
       <textarea id="input" rows="1" placeholder="Message Wright..."
         class="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
@@ -140,7 +148,6 @@
     const stopBtn = document.getElementById('stop');
     const statusEl = document.getElementById('status');
     const typingEl = document.getElementById('typing');
-    const queueBadge = document.getElementById('queue-badge');
 
     document.getElementById('change-token').addEventListener('click', changeToken);
 
@@ -148,6 +155,37 @@
     let streamEl = null;
     let streamContent = '';
     let generating = false;
+
+    // --- Agent tracking ---
+    const activeAgents = new Map(); // id -> { description, startTime, timerInterval }
+    const agentBar = document.getElementById('agent-bar');
+
+    function addAgent(id, description) {
+      if (activeAgents.has(id)) return;
+      const chip = document.createElement('span');
+      chip.className = 'agent-chip';
+      chip.id = `agent-${id}`;
+      chip.innerHTML = `<span class="agent-dot"></span><span class="agent-desc">${escapeHtml(description)}</span><span class="agent-time">0s</span>`;
+      agentBar.appendChild(chip);
+      agentBar.classList.add('active');
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const timeEl = chip.querySelector('.agent-time');
+        if (timeEl) timeEl.textContent = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
+      }, 1000);
+      activeAgents.set(id, { description, startTime, interval });
+    }
+
+    function removeAgent(id) {
+      const agent = activeAgents.get(id);
+      if (!agent) return;
+      clearInterval(agent.interval);
+      activeAgents.delete(id);
+      const chip = document.getElementById(`agent-${id}`);
+      if (chip) chip.remove();
+      if (activeAgents.size === 0) agentBar.classList.remove('active');
+    }
 
     // --- Load history from session transcript ---
     let historyOffset = 0;
@@ -502,7 +540,8 @@
           }
           finalizeStream();
           activeToolPanel = null;
-          queueBadge.classList.add('hidden');
+          // Clear any lingering agent chips
+          for (const [id] of activeAgents) removeAgent(id);
           playDoneSound();
           scrollToBottom();
         } else if (data.type === 'delta') {
@@ -553,15 +592,18 @@
           }
           setGenerating(data.active);
           if (data.active) scrollToBottom();
-        } else if (data.type === 'queued') {
-          queueBadge.textContent = `Queued (position ${data.position})`;
-          queueBadge.classList.remove('hidden');
         } else if (data.type === 'ask_user') {
           activeToolPanel = null;
           const card = createQuestionCard(data.questions);
           messagesEl.appendChild(card);
           playDoneSound();
           scrollToBottom();
+        } else if (data.type === 'agent_start') {
+          console.log('[ws] agent_start:', data.id, data.description);
+          addAgent(data.id, data.description);
+        } else if (data.type === 'agent_done') {
+          console.log('[ws] agent_done:', data.id, data.description);
+          removeAgent(data.id);
         } else if (data.type === 'error') {
           addMessage({ role: 'system', channel: 'web', content: `Error: ${data.message}` });
         }
@@ -647,7 +689,6 @@
       generating = active;
       sendBtn.classList.toggle('hidden', active);
       stopBtn.classList.toggle('hidden', !active);
-      if (!active) queueBadge.classList.add('hidden');
     }
 
     function stopGeneration() {
