@@ -278,7 +278,7 @@ app.get('/api/outbox', (req, res) => {
 app.post('/api/outbox/:id/action', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const { action, feedback } = req.body; // action: approve, reject, feedback
-  if (!['approve', 'reject', 'feedback'].includes(action)) {
+  if (!['approve', 'reject', 'feedback', 'read'].includes(action)) {
     return res.status(400).json({ error: 'invalid action' });
   }
 
@@ -292,6 +292,9 @@ app.post('/api/outbox/:id/action', (req, res) => {
   } else if (action === 'reject') {
     item.status = 'rejected';
     item.rejectedAt = new Date().toISOString();
+  } else if (action === 'read') {
+    item.status = 'read';
+    item.readAt = new Date().toISOString();
   } else if (action === 'feedback') {
     item.feedback = item.feedback || [];
     item.feedback.push({ text: feedback, ts: new Date().toISOString() });

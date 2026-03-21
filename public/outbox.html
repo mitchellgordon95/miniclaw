@@ -21,37 +21,23 @@
     .md-content a { color: #60a5fa; text-decoration: underline; }
     .md-content blockquote { border-left: 3px solid #475569; padding-left: 0.75em; margin: 0.5em 0; color: #94a3b8; }
     .md-content strong { color: #f1f5f9; }
-    .type-email { border-left: 3px solid #3b82f6; }
-    .type-social-post { border-left: 3px solid #10b981; }
-    .type-config-change { border-left: 3px solid #f59e0b; }
-    .type-default { border-left: 3px solid #6b7280; }
+
+    .item-card { background: #1e293b; border-radius: 8px; overflow: hidden; }
+    .item-card.actionable { border-left: 3px solid #f59e0b; }
+    .item-card.info-only { border-left: 3px solid #475569; opacity: 0.85; }
+
     .badge-pending { background: #854d0e; color: #fef08a; }
     .badge-approved { background: #166534; color: #86efac; }
     .badge-rejected { background: #991b1b; color: #fca5a5; }
     .badge-sent { background: #1e3a5f; color: #93c5fd; }
-    .item-card { background: #1e293b; border-radius: 8px; overflow: hidden; transition: all 0.15s; }
-    .item-card:hover { background: #1e3048; }
+    .badge-read { background: #334155; color: #94a3b8; }
+
     .feedback-thread { border-left: 2px solid #475569; }
-    .action-btn { position: relative; }
-    .action-desc {
-      display: none;
-      position: absolute;
-      bottom: calc(100% + 6px);
-      left: 0;
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 0.7rem;
-      color: #94a3b8;
-      white-space: nowrap;
-      max-width: 280px;
-      white-space: normal;
-      z-index: 10;
-      line-height: 1.4;
-      pointer-events: none;
-    }
-    .action-btn:hover .action-desc { display: block; }
+
+    details summary { cursor: pointer; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before { content: '\25b6 '; font-size: 0.6em; vertical-align: middle; color: #64748b; }
+    details[open] summary::before { content: '\25bc '; }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -62,7 +48,7 @@
       <nav class="flex gap-3 text-sm">
         <a href="/" class="text-gray-400 hover:text-white">Chat</a>
         <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
-        <span class="text-blue-400 font-medium">Outbox</span>
+        <span class="text-blue-400 font-medium">Outbox <span id="outbox-count" class="text-xs bg-yellow-700 text-yellow-200 px-1.5 py-0.5 rounded-full hidden"></span></span>
       </nav>
     </div>
     <div class="flex items-center gap-3">
@@ -72,13 +58,15 @@
         <option value="approved">Approved</option>
         <option value="rejected">Rejected</option>
         <option value="sent">Sent</option>
+        <option value="read">Read</option>
       </select>
+      <button id="dismiss-all-info" class="text-xs text-gray-500 hover:text-gray-300 hidden">Dismiss all FYIs</button>
     </div>
   </div>
 
   <!-- Content -->
   <div class="flex-1 overflow-y-auto p-4">
-    <div id="items" class="max-w-3xl mx-auto space-y-4"></div>
+    <div id="items" class="max-w-3xl mx-auto space-y-3"></div>
     <div id="empty" class="text-gray-500 text-center py-8 hidden">No outbox items</div>
   </div>
 
@@ -89,31 +77,18 @@
     const itemsEl = document.getElementById('items');
     const emptyEl = document.getElementById('empty');
     const filterEl = document.getElementById('filter');
+    const dismissBtn = document.getElementById('dismiss-all-info');
 
     filterEl.addEventListener('change', loadOutbox);
 
-    // --- Renderer cache ---
+    // Types that need explicit approval (will send something externally)
+    const ACTIONABLE_TYPES = new Set(['email', 'social-post', 'config-change']);
+    // Types that are informational (just need to be read/dismissed)
+    const INFO_TYPES = new Set(['summary', 'fyi', 'finance_summary']);
 
-    const rendererCache = {}; // type -> { render, actions } or null (404)
-
-    async function getRenderer(type) {
-      if (type in rendererCache) return rendererCache[type];
-      try {
-        const res = await fetch(`/api/outbox/types/${encodeURIComponent(type)}?token=${TOKEN}`);
-        if (!res.ok) { rendererCache[type] = null; return null; }
-        const code = await res.text();
-        // Each renderer file is an object literal wrapped in parens: ({render(){...}, actions(){...}})
-        const renderer = new Function(`return ${code}`)();
-        rendererCache[type] = renderer;
-        return renderer;
-      } catch (e) {
-        console.warn(`No renderer for type ${type}:`, e);
-        rendererCache[type] = null;
-        return null;
-      }
+    function isActionable(item) {
+      return ACTIONABLE_TYPES.has(item.type);
     }
-
-    // --- Helpers passed to renderers ---
 
     const helpers = {
       esc(text) {
@@ -126,74 +101,115 @@
       },
     };
 
-    // --- Default renderer (fallback) ---
+    // --- Render content based on type ---
 
-    const defaultRenderer = {
-      render(item, h) {
-        return `
-          ${item.content ? `<div class="md-content mt-2 bg-gray-900 rounded p-3">${h.md(item.content)}</div>` : ''}
-          ${item.reviewPath ? `<div class="text-xs text-gray-500 mt-2">Review: <span class="font-mono text-gray-400">${h.esc(item.reviewPath)}</span></div>` : ''}
-        `;
-      },
-      actions(item) {
-        if (item.status !== 'pending') return [];
-        return [
-          { id: 'approve', label: 'Approve', description: 'Approve this item.', style: 'bg-green-700 hover:bg-green-600', action: 'approve' },
-          { id: 'reject', label: 'Reject', description: 'Reject this item.', style: 'bg-red-800 hover:bg-red-700', action: 'reject' },
-        ];
-      },
-    };
+    function renderContent(item) {
+      const c = item.content;
+      if (!c) return '';
+
+      // Email-style object content
+      if (typeof c === 'object') {
+        return `<div class="bg-gray-900 rounded p-3 text-sm space-y-1">
+          ${c.to ? `<div><span class="text-gray-500 text-xs">To:</span> <span class="text-gray-300">${helpers.esc(c.to)}</span></div>` : ''}
+          ${c.subject ? `<div><span class="text-gray-500 text-xs">Subj:</span> <span class="text-gray-200 font-medium">${helpers.esc(c.subject)}</span></div>` : ''}
+          ${c.body ? `<div class="md-content mt-2 pt-2 border-t border-gray-700">${helpers.md(c.body)}</div>` : ''}
+        </div>`;
+      }
+
+      // String content (social post, comment, etc.)
+      return `<div class="md-content bg-gray-900 rounded p-3">${helpers.md(c)}</div>`;
+    }
+
+    function renderRefLink(item) {
+      const meta = item.metadata || {};
+      const thread = meta.thread;
+      if (thread) {
+        const label = meta.platform === 'hackernews' ? 'View HN thread' :
+                      meta.platform === 'reddit' ? 'View Reddit thread' : 'View thread';
+        return `<div class="mb-2"><a href="${helpers.esc(thread)}" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 underline">${label} &#8599;</a></div>`;
+      }
+      if (meta.recipient && meta.platform) {
+        return `<div class="mb-2 text-xs text-gray-500">Recipient: ${helpers.esc(meta.recipient)} (${helpers.esc(meta.platform)}${meta.subscribers ? ', ' + helpers.esc(meta.subscribers) + ' subs' : ''})</div>`;
+      }
+      return '';
+    }
 
     // --- Item card ---
 
-    async function createItemCard(item) {
-      const renderer = (await getRenderer(item.type)) || defaultRenderer;
-
+    function createItemCard(item) {
+      const actionable = isActionable(item);
       const card = document.createElement('div');
-      const validTypes = ['email', 'social-post', 'config-change'];
-      card.className = `item-card ${validTypes.includes(item.type) ? 'type-' + item.type : 'type-default'} p-4`;
+      card.className = `item-card ${actionable ? 'actionable' : 'info-only'} p-4`;
 
       const statusBadge = `badge-${item.status || 'pending'}`;
       const created = item.created ? new Date(item.created).toLocaleDateString() : '';
-      const typeContent = renderer.render(item, helpers);
 
-      card.innerHTML = `
-        <div class="flex items-start justify-between mb-2">
-          <div>
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
-              <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type || 'unknown')}</span>
-              <span class="text-xs text-gray-600">${created}</span>
-            </div>
-            <h3 class="font-medium text-sm text-gray-100">${helpers.esc(item.title || item.id)}</h3>
+      // For actionable items: show content prominently, context collapsed
+      // For info items: show title + collapsed detail
+      const contentHtml = renderContent(item);
+
+      if (actionable) {
+        // Actionable: title, then THE THING to approve, then collapsed context
+        card.innerHTML = `
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
+            <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type)}</span>
+            <span class="text-xs text-gray-600">${created}</span>
           </div>
-        </div>
-        <p class="text-sm text-gray-400 mb-3">${helpers.esc(item.description || '')}</p>
-        <div class="type-content">${typeContent}</div>
-        ${renderFeedbackThread(item)}
-        <div class="actions mt-3 pt-3 border-t border-gray-700"></div>
-      `;
+          <h3 class="font-medium text-sm text-gray-100 mb-2">${helpers.esc(item.title || item.id)}</h3>
+          ${renderRefLink(item)}
+          ${contentHtml ? `<div class="mb-2">${contentHtml}</div>` : ''}
+          ${item.description ? `<details class="mb-2"><summary class="text-xs text-gray-500">Why this?</summary><p class="text-xs text-gray-400 mt-1 pl-3">${helpers.esc(item.description)}</p></details>` : ''}
+          ${renderFeedbackThread(item)}
+          <div class="actions mt-3 pt-2 border-t border-gray-700"></div>
+        `;
+      } else {
+        // Info: compact, just title with expandable detail
+        card.innerHTML = `
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
+            <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type)}</span>
+            <span class="text-xs text-gray-600">${created}</span>
+          </div>
+          <h3 class="font-medium text-sm text-gray-100">${helpers.esc(item.title || item.id)}</h3>
+          ${(item.description || contentHtml) ? `<details class="mt-1"><summary class="text-xs text-gray-500">Details</summary><div class="mt-1 pl-3">${item.description ? `<p class="text-xs text-gray-400 mb-2">${helpers.esc(item.description)}</p>` : ''}${contentHtml}</div></details>` : ''}
+          ${renderFeedbackThread(item)}
+          <div class="actions mt-2"></div>
+        `;
+      }
 
+      // Actions
       const actionsEl = card.querySelector('.actions');
 
       if (item.status === 'pending') {
-        const actionBtns = renderer.actions(item);
-
         const btnRow = document.createElement('div');
         btnRow.className = 'flex items-center gap-2 flex-wrap';
 
-        for (const btn of actionBtns) {
-          const wrapper = document.createElement('div');
-          wrapper.className = 'action-btn';
-          wrapper.innerHTML = `
-            <button class="${btn.style} text-white text-xs px-3 py-1.5 rounded font-medium">${helpers.esc(btn.label)}</button>
-            ${btn.description ? `<div class="action-desc">${helpers.esc(btn.description)}</div>` : ''}
-          `;
-          wrapper.querySelector('button').addEventListener('click', () => doAction(item.id, btn.action, card));
-          btnRow.appendChild(wrapper);
+        if (actionable) {
+          // Approve / Reject for actionable items
+          const approveBtn = document.createElement('button');
+          approveBtn.className = 'bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1.5 rounded font-medium';
+          approveBtn.textContent = 'Approve';
+          approveBtn.addEventListener('click', () => doAction(item.id, 'approve'));
+
+          const rejectBtn = document.createElement('button');
+          rejectBtn.className = 'bg-red-800 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded font-medium';
+          rejectBtn.textContent = 'Reject';
+          rejectBtn.addEventListener('click', () => doAction(item.id, 'reject'));
+
+          btnRow.appendChild(approveBtn);
+          btnRow.appendChild(rejectBtn);
+        } else {
+          // Dismiss for info items
+          const dismissBtn = document.createElement('button');
+          dismissBtn.className = 'bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded font-medium';
+          dismissBtn.textContent = 'Dismiss';
+          dismissBtn.addEventListener('click', () => doAction(item.id, 'read'));
+
+          btnRow.appendChild(dismissBtn);
         }
 
-        // Feedback input always available for pending items
+        // Feedback input
         const feedbackGroup = document.createElement('div');
         feedbackGroup.className = 'flex-1 flex gap-2 min-w-0';
         feedbackGroup.innerHTML = `
@@ -203,7 +219,7 @@
         feedbackGroup.querySelector('.btn-feedback').addEventListener('click', () => {
           const input = feedbackGroup.querySelector('.feedback-input');
           if (input.value.trim()) {
-            doAction(item.id, 'feedback', card, input.value.trim());
+            doAction(item.id, 'feedback', input.value.trim());
             input.value = '';
           }
         });
@@ -232,7 +248,7 @@
 
     // --- Actions ---
 
-    async function doAction(id, action, card, feedback) {
+    async function doAction(id, action, feedback) {
       try {
         const res = await fetch(`/api/outbox/${id}/action?token=${TOKEN}`, {
           method: 'POST',
@@ -246,25 +262,78 @@
       }
     }
 
+    // --- Bulk dismiss ---
+
+    dismissBtn.addEventListener('click', async () => {
+      const data = await fetchOutbox();
+      const infoItems = data.items.filter(i => i.status === 'pending' && !isActionable(i));
+      for (const item of infoItems) {
+        await doAction(item.id, 'read');
+      }
+    });
+
+    async function fetchOutbox() {
+      const status = filterEl.value;
+      const url = status ? `/api/outbox?status=${status}&token=${TOKEN}` : `/api/outbox?token=${TOKEN}`;
+      const res = await fetch(url);
+      return res.json();
+    }
+
     // --- Load ---
+
+    async function updateBadge() {
+      try {
+        const res = await fetch(`/api/outbox?status=pending&token=${TOKEN}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const badge = document.getElementById('outbox-count');
+        if (data.items.length > 0) {
+          badge.textContent = data.items.length;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      } catch {}
+    }
 
     async function loadOutbox() {
       try {
-        const status = filterEl.value;
-        const url = status ? `/api/outbox?status=${status}&token=${TOKEN}` : `/api/outbox?token=${TOKEN}`;
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await fetchOutbox();
+        updateBadge();
 
         itemsEl.innerHTML = '';
         if (data.items.length === 0) {
           emptyEl.classList.remove('hidden');
+          dismissBtn.classList.add('hidden');
           return;
         }
         emptyEl.classList.add('hidden');
 
-        for (const item of data.items) {
-          itemsEl.appendChild(await createItemCard(item));
+        // Show actionable items first, then info items
+        const actionable = data.items.filter(i => isActionable(i));
+        const info = data.items.filter(i => !isActionable(i));
+
+        const hasInfoPending = info.some(i => i.status === 'pending');
+        dismissBtn.classList.toggle('hidden', !hasInfoPending);
+
+        if (actionable.length > 0) {
+          const header = document.createElement('div');
+          header.className = 'text-xs font-medium text-gray-500 uppercase tracking-wide mb-1';
+          header.textContent = `Needs approval (${actionable.length})`;
+          itemsEl.appendChild(header);
+          for (const item of actionable) {
+            itemsEl.appendChild(createItemCard(item));
+          }
+        }
+
+        if (info.length > 0) {
+          const header = document.createElement('div');
+          header.className = 'text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 mt-4';
+          header.textContent = `FYI (${info.length})`;
+          itemsEl.appendChild(header);
+          for (const item of info) {
+            itemsEl.appendChild(createItemCard(item));
+          }
         }
       } catch (e) {
         console.error('Failed to load outbox:', e);
