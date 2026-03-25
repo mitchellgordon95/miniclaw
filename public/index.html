@@ -523,10 +523,13 @@
         setTimeout(connect, 3000);
       };
 
+      let currentChannel = 'web';
+
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
 
         if (data.type === 'message') {
+          if (data.role === 'user') currentChannel = data.channel || 'web';
           addMessage(data);
           scrollToBottom();
         } else if (data.type === 'stream_end') {
@@ -534,11 +537,16 @@
             const el = streamEl.querySelector('.content');
             el.className = 'content md-content';
             el.innerHTML = renderMarkdown(data.content);
+            // Update channel badge if response is for a non-web channel
+            const ch = data.channel || currentChannel || 'web';
+            const badge = streamEl.querySelector('.channel-badge');
+            if (badge && ch !== 'web') badge.textContent = ch;
           } else {
             // No deltas arrived (e.g. error) — create the message directly
             addMessage({ role: 'assistant', channel: data.channel || 'web', content: data.content });
           }
           finalizeStream();
+          currentChannel = 'web'; // reset after turn
           activeToolPanel = null;
           // Clear any lingering agent chips
           for (const [id] of activeAgents) removeAgent(id);
@@ -547,7 +555,7 @@
         } else if (data.type === 'delta') {
           activeToolPanel = null; // Text started, finalize any tool panel
           if (!streamEl) {
-            streamEl = createMessageEl({ role: 'assistant', channel: 'web' });
+            streamEl = createMessageEl({ role: 'assistant', channel: currentChannel || 'web' });
             messagesEl.appendChild(streamEl);
             streamContent = '';
           }

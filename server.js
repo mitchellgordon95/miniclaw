@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from 'fs';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId } from './lib/claude.js';
-import { sendReply, sendSMS, validateTwilioWebhook } from './lib/channels.js';
+import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -212,9 +212,28 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   // Respond immediately with empty TwiML (we reply async via API)
   res.type('text/xml').send('<Response/>');
 
+  // Transcribe audio attachments if body is empty
+  let messageBody = result.body;
+  if (!messageBody.trim() && result.media && result.media.length > 0) {
+    const audioMedia = result.media.find(m =>
+      m.contentType?.startsWith('audio/') || m.contentType?.includes('ogg')
+    );
+    if (audioMedia) {
+      console.log(`[sms] Voice message detected (${audioMedia.contentType}), transcribing...`);
+      const transcript = await transcribeTwilioAudio(audioMedia.url, audioMedia.contentType);
+      if (transcript) {
+        messageBody = transcript;
+        await sendSMS(result.from, `Heard: "${transcript}"`);
+      } else {
+        await sendSMS(result.from, 'Could not transcribe voice message. Try again or send text.');
+        return;
+      }
+    }
+  }
+
   // PIN gate
   if (config.twilio.pin && !isSmsAuthenticated(result.from)) {
-    if (result.body.trim() === config.twilio.pin) {
+    if (messageBody.trim() === config.twilio.pin) {
       smsAuth.set(result.from, { authenticatedAt: Date.now() });
       const pending = smsPending.get(result.from);
       smsPending.delete(result.from);
@@ -231,7 +250,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
         console.log(`[sms] PIN accepted from ${result.from}`);
       }
     } else {
-      smsPending.set(result.from, { body: result.body, from: result.from, receivedAt: Date.now() });
+      smsPending.set(result.from, { body: messageBody, from: result.from, receivedAt: Date.now() });
       await sendSMS(result.from, 'PIN required. Your message has been saved and will be sent after auth.');
       console.log(`[sms] PIN required for ${result.from}, message queued`);
     }
@@ -239,7 +258,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   }
 
   try {
-    await handleMessage('sms', result.body, { from: result.from });
+    await handleMessage('sms', messageBody, { from: result.from });
   } catch (err) {
     console.error('[sms] Error handling message:', err.message);
   }
