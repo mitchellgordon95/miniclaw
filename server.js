@@ -3,12 +3,12 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId } from './lib/claude.js';
-import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio } from './lib/channels.js';
+import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, downloadTwilioImage } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,6 +27,31 @@ const startTime = Date.now();
 // --- Last Route (where to auto-reply) ---
 
 let lastRoute = { channel: 'web' };
+
+// --- Channel metadata (persisted for history rendering) ---
+
+const channelMetaPath = join(__dirname, 'data', 'channel-meta.json');
+let channelMeta = {}; // { "ts:contentPrefix" -> channel }
+try {
+  if (existsSync(channelMetaPath)) {
+    channelMeta = JSON.parse(readFileSync(channelMetaPath, 'utf8'));
+  }
+} catch { /* ignore */ }
+
+function saveChannelMeta() {
+  try { writeFileSync(channelMetaPath, JSON.stringify(channelMeta)); } catch { /* ignore */ }
+}
+
+function recordChannel(channel, content) {
+  const key = content?.slice(0, 100) || '';
+  channelMeta[key] = channel;
+  // Prune old entries (keep last 500)
+  const keys = Object.keys(channelMeta);
+  if (keys.length > 500) {
+    for (const k of keys.slice(0, keys.length - 500)) delete channelMeta[k];
+  }
+  saveChannelMeta();
+}
 
 // --- SMS PIN Auth ---
 
@@ -186,16 +211,33 @@ app.get('/api/messages', async (req, res) => {
     const total = all.length;
     const limit = parseInt(req.query.limit) || 50;
 
+    let slice, offset;
     if (req.query.offset !== undefined) {
-      // "Load more" -- return messages ending at this offset
       const end = Math.max(0, parseInt(req.query.offset));
       const start = Math.max(0, end - limit);
-      res.json({ messages: all.slice(start, end), total, offset: start });
+      slice = all.slice(start, end);
+      offset = start;
     } else {
-      // Initial load -- return last N
-      const offset = Math.max(0, total - limit);
-      res.json({ messages: all.slice(offset), total, offset });
+      offset = Math.max(0, total - limit);
+      slice = all.slice(offset);
     }
+
+    // Attach channel metadata to user messages
+    for (const msg of slice) {
+      if (msg.type === 'user') {
+        const content = typeof msg.message?.content === 'string'
+          ? msg.message.content
+          : Array.isArray(msg.message?.content)
+            ? msg.message.content.find(b => b.type === 'text')?.text || ''
+            : '';
+        const key = content.slice(0, 100);
+        if (channelMeta[key]) {
+          msg._channel = channelMeta[key];
+        }
+      }
+    }
+
+    res.json({ messages: slice, total, offset });
   } catch (err) {
     console.error('[api] Failed to read session:', err.message);
     res.json({ messages: [], total: 0, offset: 0 });
@@ -212,13 +254,20 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   // Respond immediately with empty TwiML (we reply async via API)
   res.type('text/xml').send('<Response/>');
 
-  // Transcribe audio attachments if body is empty
+  // Process media attachments
   let messageBody = result.body;
-  if (!messageBody.trim() && result.media && result.media.length > 0) {
+  let imageBlocks = []; // Anthropic image content blocks
+
+  if (result.media && result.media.length > 0) {
     const audioMedia = result.media.find(m =>
       m.contentType?.startsWith('audio/') || m.contentType?.includes('ogg')
     );
-    if (audioMedia) {
+    const imageMedia = result.media.filter(m =>
+      m.contentType?.startsWith('image/')
+    );
+
+    // Transcribe audio if body is empty
+    if (!messageBody.trim() && audioMedia) {
       console.log(`[sms] Voice message detected (${audioMedia.contentType}), transcribing...`);
       const transcript = await transcribeTwilioAudio(audioMedia.url, audioMedia.contentType);
       if (transcript) {
@@ -229,6 +278,33 @@ app.post('/twilio-sms/webhook', async (req, res) => {
         return;
       }
     }
+
+    // Download images
+    for (const img of imageMedia) {
+      console.log(`[sms] Image attachment detected (${img.contentType}), downloading...`);
+      const downloaded = await downloadTwilioImage(img.url, img.contentType);
+      if (downloaded) {
+        imageBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: downloaded.mediaType,
+            data: downloaded.base64,
+          },
+        });
+      }
+    }
+  }
+
+  // Build content (string or content block array)
+  let content;
+  if (imageBlocks.length > 0) {
+    content = [
+      ...imageBlocks,
+      { type: 'text', text: messageBody || 'What is this?' },
+    ];
+  } else {
+    content = messageBody;
   }
 
   // PIN gate
@@ -241,7 +317,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
         await sendSMS(result.from, 'Authenticated. Processing your message.');
         console.log(`[sms] PIN accepted from ${result.from}, replaying queued message`);
         try {
-          await handleMessage('sms', pending.body, { from: result.from });
+          await handleMessage('sms', pending.content, { from: result.from });
         } catch (err) {
           console.error('[sms] Error handling queued message:', err.message);
         }
@@ -250,7 +326,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
         console.log(`[sms] PIN accepted from ${result.from}`);
       }
     } else {
-      smsPending.set(result.from, { body: messageBody, from: result.from, receivedAt: Date.now() });
+      smsPending.set(result.from, { body: messageBody, content, from: result.from, receivedAt: Date.now() });
       await sendSMS(result.from, 'PIN required. Your message has been saved and will be sent after auth.');
       console.log(`[sms] PIN required for ${result.from}, message queued`);
     }
@@ -258,7 +334,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   }
 
   try {
-    await handleMessage('sms', messageBody, { from: result.from });
+    await handleMessage('sms', content, { from: result.from });
   } catch (err) {
     console.error('[sms] Error handling message:', err.message);
   }
@@ -357,6 +433,14 @@ app.get('/health', (req, res) => {
 async function handleMessage(channel, content, meta = {}) {
   const isUserFacing = channel === 'web' || channel === 'sms';
 
+  // Extract text for display/recording (content may be string or content block array)
+  const displayText = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.filter(b => b.type === 'text').map(b => b.text).join('\n') || '(image)'
+      : String(content);
+  const hasImages = Array.isArray(content) && content.some(b => b.type === 'image');
+
   // Track last route for user-initiated channels
   if (channel === 'sms') {
     lastRoute = { channel: 'sms', from: meta.from };
@@ -368,13 +452,19 @@ async function handleMessage(channel, content, meta = {}) {
   currentTurnChannel = channel;
   currentTurnContent = '';
 
+  // Record channel for history rendering
+  if (channel === 'sms' || channel === 'web') {
+    recordChannel(channel, displayText);
+  }
+
   // Broadcast user message to web UI
   if (isUserFacing) {
     broadcast({
       type: 'message',
       role: 'user',
       channel,
-      content,
+      content: displayText,
+      hasImages,
       ts: new Date().toISOString(),
     });
     broadcast({ type: 'typing', active: true });

@@ -241,13 +241,14 @@
     function renderSessionMessage(msg, container) {
       const target = container || messagesEl;
       const content = msg.message?.content;
+      const ch = msg._channel || 'web';
       if (msg.type === 'user') {
         if (typeof content === 'string') {
-          target.appendChild(createMessageEl({ role: 'user', channel: 'web', content }));
+          target.appendChild(createMessageEl({ role: 'user', channel: ch, content }));
         } else if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
-              target.appendChild(createMessageEl({ role: 'user', channel: 'web', content: block.text }));
+              target.appendChild(createMessageEl({ role: 'user', channel: ch, content: block.text }));
             }
           }
         }
@@ -257,7 +258,7 @@
           const groups = groupContentBlocks(content);
           for (const group of groups) {
             if (group.type === 'text') {
-              target.appendChild(createMessageEl({ role: 'assistant', channel: 'web', content: group.text }));
+              target.appendChild(createMessageEl({ role: 'assistant', channel: ch, content: group.text }));
             } else if (group.type === 'tools') {
               renderToolPanel(target, group.blocks);
             } else if (group.type === 'plan') {
