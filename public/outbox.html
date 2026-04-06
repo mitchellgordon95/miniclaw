@@ -10,64 +10,25 @@
     body { background: #0f172a; color: #e2e8f0; }
     .md-content { font-size: 0.875rem; line-height: 1.6; }
     .md-content p { margin: 0.4em 0; }
-    .md-content p:first-child { margin-top: 0; }
-    .md-content p:last-child { margin-bottom: 0; }
-    .md-content h1, .md-content h2, .md-content h3 { font-weight: 600; margin: 0.6em 0 0.3em; color: #f1f5f9; }
-    .md-content code { background: #1e293b; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.85em; color: #e2e8f0; }
-    .md-content pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75em; margin: 0.5em 0; overflow-x: auto; }
-    .md-content pre code { background: none; padding: 0; font-size: 0.8em; }
-    .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
-    .md-content li { margin: 0.2em 0; }
-    .md-content a { color: #60a5fa; text-decoration: underline; }
-    .md-content blockquote { border-left: 3px solid #475569; padding-left: 0.75em; margin: 0.5em 0; color: #94a3b8; }
-    .md-content strong { color: #f1f5f9; }
-
-    .item-card { background: #1e293b; border-radius: 8px; overflow: hidden; }
-    .item-card.actionable { border-left: 3px solid #f59e0b; }
-    .item-card.info-only { border-left: 3px solid #475569; opacity: 0.85; }
-
-    .badge-pending { background: #854d0e; color: #fef08a; }
-    .badge-approved { background: #166534; color: #86efac; }
-    .badge-rejected { background: #991b1b; color: #fca5a5; }
-    .badge-sent { background: #1e3a5f; color: #93c5fd; }
-    .badge-read { background: #334155; color: #94a3b8; }
-
-    .feedback-thread { border-left: 2px solid #475569; }
-
-    details summary { cursor: pointer; list-style: none; }
-    details summary::-webkit-details-marker { display: none; }
-    details summary::before { content: '\25b6 '; font-size: 0.6em; vertical-align: middle; color: #64748b; }
-    details[open] summary::before { content: '\25bc '; }
+    .item-card { background: #1e293b; border-radius: 8px; border-left: 3px solid #166534; overflow: hidden; }
   </style>
 </head>
 <body class="h-screen flex flex-col">
-  <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
     <div class="flex items-center gap-4">
       <h1 class="text-lg font-semibold">MiniClaw</h1>
       <nav class="flex gap-3 text-sm">
         <a href="/" class="text-gray-400 hover:text-white">Chat</a>
         <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
-        <span class="text-blue-400 font-medium">Outbox <span id="outbox-count" class="text-xs bg-yellow-700 text-yellow-200 px-1.5 py-0.5 rounded-full hidden"></span></span>
+        <a href="/inbox.html" class="text-gray-400 hover:text-white">Inbox</a>
+        <span class="text-blue-400 font-medium">Outbox</span>
       </nav>
-    </div>
-    <div class="flex items-center gap-3">
-      <select id="filter" class="bg-gray-800 text-sm text-gray-300 rounded px-2 py-1 border border-gray-600">
-        <option value="">All</option>
-        <option value="pending" selected>Pending</option>
-        <option value="approved">Approved</option>
-        <option value="rejected">Rejected</option>
-        <option value="sent">Sent</option>
-        <option value="read">Read</option>
-      </select>
-      <button id="dismiss-all-info" class="text-xs text-gray-500 hover:text-gray-300 hidden">Dismiss all FYIs</button>
     </div>
   </div>
 
-  <!-- Content -->
   <div class="flex-1 overflow-y-auto p-4">
     <div id="items" class="max-w-3xl mx-auto space-y-3"></div>
-    <div id="empty" class="text-gray-500 text-center py-8 hidden">No outbox items</div>
+    <div id="empty" class="text-gray-500 text-center py-8 hidden">Outbox empty. Approved items appear here until Wright executes them.</div>
   </div>
 
   <script>
@@ -76,264 +37,37 @@
 
     const itemsEl = document.getElementById('items');
     const emptyEl = document.getElementById('empty');
-    const filterEl = document.getElementById('filter');
-    const dismissBtn = document.getElementById('dismiss-all-info');
-
-    filterEl.addEventListener('change', loadOutbox);
-
-    // Types that need explicit approval (will send something externally)
-    const ACTIONABLE_TYPES = new Set(['email', 'social-post', 'config-change']);
-    // Types that are informational (just need to be read/dismissed)
-    const INFO_TYPES = new Set(['summary', 'fyi', 'finance_summary']);
-
-    function isActionable(item) {
-      return ACTIONABLE_TYPES.has(item.type);
-    }
 
     const helpers = {
-      esc(text) {
-        const div = document.createElement('div');
-        div.textContent = String(text || '');
-        return div.innerHTML;
-      },
-      md(text) {
-        return marked.parse(text || '', { breaks: true });
-      },
+      esc(text) { const d = document.createElement('div'); d.textContent = String(text || ''); return d.innerHTML; },
+      md(text) { return marked.parse(text || '', { breaks: true }); },
     };
-
-    // --- Render content based on type ---
-
-    function renderContent(item) {
-      const c = item.content;
-      if (!c) return '';
-
-      // Email-style object content
-      if (typeof c === 'object') {
-        return `<div class="bg-gray-900 rounded p-3 text-sm space-y-1">
-          ${c.to ? `<div><span class="text-gray-500 text-xs">To:</span> <span class="text-gray-300">${helpers.esc(c.to)}</span></div>` : ''}
-          ${c.subject ? `<div><span class="text-gray-500 text-xs">Subj:</span> <span class="text-gray-200 font-medium">${helpers.esc(c.subject)}</span></div>` : ''}
-          ${c.body ? `<div class="md-content mt-2 pt-2 border-t border-gray-700">${helpers.md(c.body)}</div>` : ''}
-        </div>`;
-      }
-
-      // String content (social post, comment, etc.)
-      return `<div class="md-content bg-gray-900 rounded p-3">${helpers.md(c)}</div>`;
-    }
-
-    function renderRefLink(item) {
-      const meta = item.metadata || {};
-      const thread = meta.thread;
-      if (thread) {
-        const label = meta.platform === 'hackernews' ? 'View HN thread' :
-                      meta.platform === 'reddit' ? 'View Reddit thread' : 'View thread';
-        return `<div class="mb-2"><a href="${helpers.esc(thread)}" target="_blank" class="text-xs text-blue-400 hover:text-blue-300 underline">${label} &#8599;</a></div>`;
-      }
-      if (meta.recipient && meta.platform) {
-        return `<div class="mb-2 text-xs text-gray-500">Recipient: ${helpers.esc(meta.recipient)} (${helpers.esc(meta.platform)}${meta.subscribers ? ', ' + helpers.esc(meta.subscribers) + ' subs' : ''})</div>`;
-      }
-      return '';
-    }
-
-    // --- Item card ---
-
-    function createItemCard(item) {
-      const actionable = isActionable(item);
-      const card = document.createElement('div');
-      card.className = `item-card ${actionable ? 'actionable' : 'info-only'} p-4`;
-
-      const statusBadge = `badge-${item.status || 'pending'}`;
-      const created = item.created ? new Date(item.created).toLocaleDateString() : '';
-
-      // For actionable items: show content prominently, context collapsed
-      // For info items: show title + collapsed detail
-      const contentHtml = renderContent(item);
-
-      if (actionable) {
-        // Actionable: title, then THE THING to approve, then collapsed context
-        card.innerHTML = `
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
-            <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type)}</span>
-            <span class="text-xs text-gray-600">${created}</span>
-          </div>
-          <h3 class="font-medium text-sm text-gray-100 mb-2">${helpers.esc(item.title || item.id)}</h3>
-          ${renderRefLink(item)}
-          ${contentHtml ? `<div class="mb-2">${contentHtml}</div>` : ''}
-          ${item.description ? `<details class="mb-2"><summary class="text-xs text-gray-500">Why this?</summary><p class="text-xs text-gray-400 mt-1 pl-3">${helpers.esc(item.description)}</p></details>` : ''}
-          ${renderFeedbackThread(item)}
-          <div class="actions mt-3 pt-2 border-t border-gray-700"></div>
-        `;
-      } else {
-        // Info: compact, just title with expandable detail
-        card.innerHTML = `
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs px-2 py-0.5 rounded font-medium ${statusBadge}">${helpers.esc(item.status || 'pending')}</span>
-            <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type)}</span>
-            <span class="text-xs text-gray-600">${created}</span>
-          </div>
-          <h3 class="font-medium text-sm text-gray-100">${helpers.esc(item.title || item.id)}</h3>
-          ${(item.description || contentHtml) ? `<details class="mt-1"><summary class="text-xs text-gray-500">Details</summary><div class="mt-1 pl-3">${item.description ? `<p class="text-xs text-gray-400 mb-2">${helpers.esc(item.description)}</p>` : ''}${contentHtml}</div></details>` : ''}
-          ${renderFeedbackThread(item)}
-          <div class="actions mt-2"></div>
-        `;
-      }
-
-      // Actions
-      const actionsEl = card.querySelector('.actions');
-
-      if (item.status === 'pending') {
-        const btnRow = document.createElement('div');
-        btnRow.className = 'flex items-center gap-2 flex-wrap';
-
-        if (actionable) {
-          // Approve / Reject for actionable items
-          const approveBtn = document.createElement('button');
-          approveBtn.className = 'bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1.5 rounded font-medium';
-          approveBtn.textContent = 'Approve';
-          approveBtn.addEventListener('click', () => doAction(item.id, 'approve'));
-
-          const rejectBtn = document.createElement('button');
-          rejectBtn.className = 'bg-red-800 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded font-medium';
-          rejectBtn.textContent = 'Reject';
-          rejectBtn.addEventListener('click', () => doAction(item.id, 'reject'));
-
-          btnRow.appendChild(approveBtn);
-          btnRow.appendChild(rejectBtn);
-        } else {
-          // Dismiss for info items
-          const dismissBtn = document.createElement('button');
-          dismissBtn.className = 'bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded font-medium';
-          dismissBtn.textContent = 'Dismiss';
-          dismissBtn.addEventListener('click', () => doAction(item.id, 'read'));
-
-          btnRow.appendChild(dismissBtn);
-        }
-
-        // Feedback input
-        const feedbackGroup = document.createElement('div');
-        feedbackGroup.className = 'flex-1 flex gap-2 min-w-0';
-        feedbackGroup.innerHTML = `
-          <input class="feedback-input flex-1 bg-gray-800 text-white text-xs rounded px-3 py-1.5 border border-gray-600 placeholder-gray-500" placeholder="Feedback...">
-          <button class="btn-feedback bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded font-medium">Send</button>
-        `;
-        feedbackGroup.querySelector('.btn-feedback').addEventListener('click', () => {
-          const input = feedbackGroup.querySelector('.feedback-input');
-          if (input.value.trim()) {
-            doAction(item.id, 'feedback', input.value.trim());
-            input.value = '';
-          }
-        });
-        feedbackGroup.querySelector('.feedback-input').addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') { e.preventDefault(); feedbackGroup.querySelector('.btn-feedback').click(); }
-        });
-
-        btnRow.appendChild(feedbackGroup);
-        actionsEl.appendChild(btnRow);
-      } else {
-        const ts = item.approvedAt || item.rejectedAt || '';
-        actionsEl.innerHTML = `<span class="text-xs text-gray-600">${helpers.esc(item.status)} ${ts ? new Date(ts).toLocaleString() : ''}</span>`;
-      }
-
-      return card;
-    }
-
-    function renderFeedbackThread(item) {
-      if (!item.feedback || item.feedback.length === 0) return '';
-      const entries = item.feedback.map(f => {
-        const ts = f.ts ? new Date(f.ts).toLocaleString() : '';
-        return `<div class="py-1"><span class="text-xs text-gray-500">${ts}</span> <span class="text-xs text-gray-300">${helpers.esc(f.text)}</span></div>`;
-      }).join('');
-      return `<div class="feedback-thread mt-2 pl-3 ml-1">${entries}</div>`;
-    }
-
-    // --- Actions ---
-
-    async function doAction(id, action, feedback) {
-      try {
-        const res = await fetch(`/api/outbox/${id}/action?token=${TOKEN}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, feedback }),
-        });
-        if (!res.ok) throw new Error('Failed');
-        loadOutbox();
-      } catch (e) {
-        console.error('Action failed:', e);
-      }
-    }
-
-    // --- Bulk dismiss ---
-
-    dismissBtn.addEventListener('click', async () => {
-      const data = await fetchOutbox();
-      const infoItems = data.items.filter(i => i.status === 'pending' && !isActionable(i));
-      for (const item of infoItems) {
-        await doAction(item.id, 'read');
-      }
-    });
-
-    async function fetchOutbox() {
-      const status = filterEl.value;
-      const url = status ? `/api/outbox?status=${status}&token=${TOKEN}` : `/api/outbox?token=${TOKEN}`;
-      const res = await fetch(url);
-      return res.json();
-    }
-
-    // --- Load ---
-
-    async function updateBadge() {
-      try {
-        const res = await fetch(`/api/outbox?status=pending&token=${TOKEN}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const badge = document.getElementById('outbox-count');
-        if (data.items.length > 0) {
-          badge.textContent = data.items.length;
-          badge.classList.remove('hidden');
-        } else {
-          badge.classList.add('hidden');
-        }
-      } catch {}
-    }
 
     async function loadOutbox() {
       try {
-        const data = await fetchOutbox();
-        updateBadge();
+        const res = await fetch(`/api/outbox?token=${TOKEN}`);
+        const data = await res.json();
 
         itemsEl.innerHTML = '';
         if (data.items.length === 0) {
           emptyEl.classList.remove('hidden');
-          dismissBtn.classList.add('hidden');
           return;
         }
         emptyEl.classList.add('hidden');
 
-        // Show actionable items first, then info items
-        const actionable = data.items.filter(i => isActionable(i));
-        const info = data.items.filter(i => !isActionable(i));
-
-        const hasInfoPending = info.some(i => i.status === 'pending');
-        dismissBtn.classList.toggle('hidden', !hasInfoPending);
-
-        if (actionable.length > 0) {
-          const header = document.createElement('div');
-          header.className = 'text-xs font-medium text-gray-500 uppercase tracking-wide mb-1';
-          header.textContent = `Needs approval (${actionable.length})`;
-          itemsEl.appendChild(header);
-          for (const item of actionable) {
-            itemsEl.appendChild(createItemCard(item));
-          }
-        }
-
-        if (info.length > 0) {
-          const header = document.createElement('div');
-          header.className = 'text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 mt-4';
-          header.textContent = `FYI (${info.length})`;
-          itemsEl.appendChild(header);
-          for (const item of info) {
-            itemsEl.appendChild(createItemCard(item));
-          }
+        for (const item of data.items) {
+          const card = document.createElement('div');
+          card.className = 'item-card p-4';
+          const approved = item.approvedAt ? new Date(item.approvedAt).toLocaleString() : '';
+          card.innerHTML = `
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">${helpers.esc(item.type)}</span>
+              <span class="text-xs text-green-400">Approved ${approved}</span>
+            </div>
+            <h3 class="font-medium text-sm text-gray-100">${helpers.esc(item.title || item.id)}</h3>
+            ${item.content ? `<details class="mt-1"><summary class="text-xs text-gray-500">Details</summary><div class="md-content bg-gray-900 rounded p-3 mt-1">${typeof item.content === 'string' ? helpers.md(item.content) : helpers.esc(JSON.stringify(item.content))}</div></details>` : ''}
+          `;
+          itemsEl.appendChild(card);
         }
       } catch (e) {
         console.error('Failed to load outbox:', e);

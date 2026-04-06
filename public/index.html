@@ -85,7 +85,8 @@
       <nav class="flex gap-3 text-sm">
         <span class="text-blue-400 font-medium">Chat</span>
         <a href="/cron.html" class="text-gray-400 hover:text-white">Cron</a>
-        <a href="/outbox.html" class="text-gray-400 hover:text-white">Outbox <span id="outbox-badge" class="text-xs bg-yellow-700 text-yellow-200 px-1.5 py-0.5 rounded-full hidden"></span></a>
+        <a href="/inbox.html" class="text-gray-400 hover:text-white">Inbox <span id="inbox-badge" class="text-xs bg-yellow-700 text-yellow-200 px-1.5 py-0.5 rounded-full hidden"></span></a>
+        <a href="/outbox.html" class="text-gray-400 hover:text-white">Outbox</a>
       </nav>
     </div>
     <div class="flex items-center gap-3">
@@ -767,12 +768,12 @@
     }
 
     // --- Init ---
-    async function updateOutboxBadge() {
+    async function updateInboxBadge() {
       try {
-        const res = await fetch(`/api/outbox?status=pending&token=${TOKEN}`);
+        const res = await fetch(`/api/inbox?token=${TOKEN}`);
         if (!res.ok) return;
         const data = await res.json();
-        const badge = document.getElementById('outbox-badge');
+        const badge = document.getElementById('inbox-badge');
         if (data.items.length > 0) {
           badge.textContent = data.items.length;
           badge.classList.remove('hidden');
@@ -784,9 +785,9 @@
 
     loadHistory();
     loadStatus();
-    updateOutboxBadge();
+    updateInboxBadge();
     setInterval(loadStatus, 30000);
-    setInterval(updateOutboxBadge, 3600000);
+    setInterval(updateInboxBadge, 3600000);
     connect();
     inputEl.focus();
   </script>

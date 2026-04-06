@@ -346,68 +346,70 @@ app.get('/api/cron/runs', (req, res) => {
   res.json(readCronRuns(limit));
 });
 
-// --- Outbox API ---
+// --- Inbox/Outbox API ---
+// Inbox: items from Wright needing Mitchell's attention (presence = needs attention)
+// Outbox: items Mitchell approved, queued for Wright to execute
 
+const INBOX_PATH = join(config.workspacePath, 'data/inbox.json');
 const OUTBOX_PATH = join(config.workspacePath, 'data/outbox.json');
 
-function readOutbox() {
+function readJSON(path) {
   try {
-    return JSON.parse(readFileSync(OUTBOX_PATH, 'utf8'));
+    return JSON.parse(readFileSync(path, 'utf8'));
   } catch {
     return { items: [] };
   }
 }
 
-function writeOutbox(data) {
-  writeFileSync(OUTBOX_PATH, JSON.stringify(data, null, 2));
+function writeJSON(path, data) {
+  writeFileSync(path, JSON.stringify(data, null, 2));
 }
 
-app.get('/api/outbox', (req, res) => {
+// Inbox: list all items
+app.get('/api/inbox', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  const data = readOutbox();
-  const status = req.query.status; // optional filter
-  const items = status ? data.items.filter(i => i.status === status) : data.items;
-  res.json({ items });
+  res.json(readJSON(INBOX_PATH));
 });
 
-app.post('/api/outbox/:id/action', (req, res) => {
+// Inbox: action on an item (approve -> moves to outbox, dismiss -> deleted, feedback -> added)
+app.post('/api/inbox/:id/action', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  const { action, feedback } = req.body; // action: approve, reject, feedback
-  if (!['approve', 'reject', 'feedback', 'read'].includes(action)) {
+  const { action, feedback } = req.body;
+  if (!['approve', 'dismiss', 'feedback'].includes(action)) {
     return res.status(400).json({ error: 'invalid action' });
   }
 
-  const data = readOutbox();
-  const item = data.items.find(i => i.id === req.params.id);
-  if (!item) return res.status(404).json({ error: 'item not found' });
+  const inbox = readJSON(INBOX_PATH);
+  const idx = inbox.items.findIndex(i => i.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'item not found' });
+
+  const item = inbox.items[idx];
 
   if (action === 'approve') {
-    item.status = 'approved';
+    // Move to outbox
+    inbox.items.splice(idx, 1);
+    writeJSON(INBOX_PATH, inbox);
+    const outbox = readJSON(OUTBOX_PATH);
     item.approvedAt = new Date().toISOString();
-  } else if (action === 'reject') {
-    item.status = 'rejected';
-    item.rejectedAt = new Date().toISOString();
-  } else if (action === 'read') {
-    item.status = 'read';
-    item.readAt = new Date().toISOString();
+    outbox.items.push(item);
+    writeJSON(OUTBOX_PATH, outbox);
+    return res.json({ ok: true, moved: 'outbox' });
+  } else if (action === 'dismiss') {
+    inbox.items.splice(idx, 1);
+    writeJSON(INBOX_PATH, inbox);
+    return res.json({ ok: true, dismissed: true });
   } else if (action === 'feedback') {
     item.feedback = item.feedback || [];
     item.feedback.push({ text: feedback, ts: new Date().toISOString() });
+    writeJSON(INBOX_PATH, inbox);
+    return res.json({ ok: true, item });
   }
-
-  writeOutbox(data);
-  res.json({ ok: true, item });
 });
 
-app.get('/api/outbox/types/:type', (req, res) => {
+// Outbox: list approved items queued for execution
+app.get('/api/outbox', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  const typePath = join(config.workspacePath, 'data/outbox-types', `${req.params.type}.js`);
-  try {
-    const content = readFileSync(typePath, 'utf8');
-    res.type('application/javascript').send(content);
-  } catch {
-    res.status(404).json({ error: 'no custom renderer' });
-  }
+  res.json(readJSON(OUTBOX_PATH));
 });
 
 app.get('/api/status', (req, res) => {
