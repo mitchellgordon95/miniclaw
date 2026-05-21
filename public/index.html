@@ -565,6 +565,7 @@
           contentEl.innerHTML = renderMarkdown(streamContent);
           scrollToBottom();
         } else if (data.type === 'tool_start') {
+          finalizeStream();
           if (!activeToolPanel) {
             activeToolPanel = createToolPanel();
             messagesEl.appendChild(activeToolPanel);

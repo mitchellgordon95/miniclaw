@@ -394,26 +394,29 @@ async function handleMessage(channel, content, meta = {}) {
     recordChannel(channel, displayText);
   }
 
-  // Broadcast user message to web UI
+  // Show typing indicator immediately for responsiveness
   if (isUserFacing) {
-    broadcast({
-      type: 'message',
-      role: 'user',
-      channel,
-      content: displayText,
-      hasImages,
-      ts: new Date().toISOString(),
-    });
     broadcast({ type: 'typing', active: true });
   }
 
-  // Push message into the persistent session
+  // Push message into the persistent session, then broadcast to UI
   try {
     await sendMessage(content, {
       channel,
       planMode: meta.planMode || false,
       model: meta.model || null,
     });
+    // Broadcast user message only after SDK has persisted it
+    if (isUserFacing) {
+      broadcast({
+        type: 'message',
+        role: 'user',
+        channel,
+        content: displayText,
+        hasImages,
+        ts: new Date().toISOString(),
+      });
+    }
   } catch (err) {
     console.error(`[claude] Error:`, err.message);
     if (isUserFacing) {
