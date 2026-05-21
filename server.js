@@ -5,9 +5,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
-import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId } from './lib/claude.js';
+import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId } from './lib/claude.js';
 import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, downloadTwilioImage } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 
@@ -242,6 +242,20 @@ app.get('/api/messages', async (req, res) => {
     console.error('[api] Failed to read session:', err.message);
     res.json({ messages: [], total: 0, offset: 0 });
   }
+});
+
+app.post('/api/clear', async (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const sessionId = getSessionId();
+  if (sessionId) {
+    try {
+      await deleteSession(sessionId, { dir: config.workspacePath });
+    } catch (err) {
+      console.error('[api] deleteSession error:', err.message);
+    }
+    saveSessionId('');
+  }
+  res.json({ ok: true });
 });
 
 app.post('/twilio-sms/webhook', async (req, res) => {

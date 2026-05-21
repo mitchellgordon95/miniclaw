@@ -728,9 +728,26 @@
       inputEl.style.height = inputEl.scrollHeight + 'px';
     }
 
+    async function clearSession() {
+      try {
+        await fetch(`/api/clear?token=${TOKEN}`, { method: 'POST' });
+        messagesEl.innerHTML = '';
+        historyOffset = 0;
+        historyTotal = 0;
+      } catch (e) {
+        console.error('Failed to clear session:', e);
+      }
+    }
+
     function send() {
       const content = inputEl.value.trim();
       if (!content || !ws || ws.readyState !== 1) return;
+      if (content === '/clear') {
+        inputEl.value = '';
+        autoResize();
+        clearSession();
+        return;
+      }
       ws.send(JSON.stringify({ type: 'message', content, planMode }));
       inputEl.value = '';
       autoResize();
