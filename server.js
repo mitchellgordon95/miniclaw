@@ -9,7 +9,8 @@ import { writeFile } from 'fs/promises';
 import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId } from './lib/claude.js';
-import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage } from './lib/channels.js';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage, loadResendCreds } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 import { geminiQuery } from './lib/gemini.js';
 
@@ -200,7 +201,10 @@ events.on('error', (message) => {
 // --- HTTP Routes ---
 
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json({ limit: '25mb' }));
+app.use(express.json({
+  limit: '25mb',
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); },
+}));
 app.use(express.static(join(__dirname, 'public')));
 
 // --- File Uploads ---
@@ -268,6 +272,71 @@ app.post('/api/transcribe', async (req, res) => {
   } catch (err) {
     console.error('[transcribe] endpoint error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Verify a Resend (svix) webhook signature against the raw body.
+function verifyResendWebhook(secret, headers, rawBody) {
+  const id = headers['svix-id'];
+  const ts = headers['svix-timestamp'];
+  const sigHeader = headers['svix-signature'];
+  if (!id || !ts || !sigHeader) return false;
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const expected = createHmac('sha256', key).update(`${id}.${ts}.${rawBody}`).digest('base64');
+  const expBuf = Buffer.from(expected);
+  // Header may carry multiple space-separated "v1,<sig>" values
+  return sigHeader.split(' ').some((part) => {
+    const sig = part.includes(',') ? part.split(',')[1] : part;
+    const sigBuf = Buffer.from(sig);
+    return sigBuf.length === expBuf.length && timingSafeEqual(sigBuf, expBuf);
+  });
+}
+
+// Inbound email from Resend: a reply from Mitchell becomes a task for Wright.
+app.post('/api/email/inbound', async (req, res) => {
+  const creds = loadResendCreds();
+  if (!creds?.api_key) return res.status(500).send('resend not configured');
+
+  // Signature check (skip only if no secret configured yet)
+  if (creds.webhook_secret &&
+      !verifyResendWebhook(creds.webhook_secret, req.headers, req.rawBody || '')) {
+    console.log('[email] inbound rejected: bad signature');
+    return res.status(401).send('bad signature');
+  }
+
+  const evt = req.body;
+  if (evt?.type !== 'email.received') return res.json({ ok: true, ignored: 'type' });
+
+  const data = evt.data || {};
+  const from = (Array.isArray(data.from) ? data.from[0] : data.from) || '';
+  // Allowlist: only act on mail from Mitchell himself
+  const allow = creds.allow_from || [];
+  if (!allow.some((a) => from.toLowerCase().includes(a.toLowerCase()))) {
+    console.log(`[email] ignoring inbound from ${from}`);
+    return res.json({ ok: true, ignored: 'sender' });
+  }
+
+  res.json({ ok: true }); // ack fast; process async
+
+  try {
+    const r = await fetch(`https://api.resend.com/emails/receiving/${data.email_id}`, {
+      headers: { Authorization: `Bearer ${creds.api_key}`, 'User-Agent': 'miniclaw/1.0' },
+    });
+    if (!r.ok) {
+      console.error(`[email] retrieve failed (${r.status}): ${await r.text()}`);
+      return;
+    }
+    const full = await r.json();
+    let text = (full.text || '').trim();
+    if (!text && full.html) text = full.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) { console.log('[email] inbound had no body'); return; }
+    // Strip quoted reply history (everything from the first quote marker on)
+    text = text.split(/\n\s*On .+ wrote:/)[0].split(/\n>/)[0].trim();
+
+    console.log(`[email] inbound task from ${from}: "${text.slice(0, 80)}"`);
+    await handleMessage('email', text, { from, subject: data.subject });
+  } catch (err) {
+    console.error('[email] inbound processing error:', err.message);
   }
 });
 
@@ -468,6 +537,8 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'sms', from: meta.from };
   } else if (channel === 'web') {
     lastRoute = { channel: 'web' };
+  } else if (channel === 'email') {
+    lastRoute = { channel: 'email', from: meta.from, subject: meta.subject };
   }
 
   // /gemini intercept: forward verbatim to Gemini, never touches Anthropic SDK or session history.
