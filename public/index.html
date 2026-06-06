@@ -75,6 +75,24 @@
     .agent-chip .agent-dot { width: 6px; height: 6px; border-radius: 50%; background: #8b5cf6; animation: pulse-agent 1.5s infinite; }
     .agent-chip .agent-time { color: #6d6d8a; font-variant-numeric: tabular-nums; }
     @keyframes pulse-agent { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .attach-btn { background: #1f2937; color: #94a3b8; border: 1px solid #334155; border-radius: 8px; padding: 0 12px; cursor: pointer; font-size: 1.1rem; line-height: 1; }
+    .attach-btn:hover { background: #374151; color: #e2e8f0; }
+    .uploads-wrap { background: #0d1f17; border: 1px solid #14532d; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .uploads-label { font-size: 0.7rem; color: #86efac; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+    .uploads-bar { display: flex; flex-wrap: wrap; gap: 6px; }
+    .upload-chip { display: inline-flex; align-items: center; gap: 6px; background: #1e293b; border: 1px solid #22c55e; border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 0.75rem; color: #d1fae5; }
+    .upload-chip.uploading { border-color: #f59e0b; color: #fbbf24; background: #1f1a0d; }
+    .upload-chip.error { border-color: #ef4444; color: #fca5a5; background: #1f0d0d; }
+    .upload-chip .uc-check { color: #22c55e; font-weight: 700; }
+    .upload-chip.uploading .uc-check { display: none; }
+    .upload-chip.error .uc-check { color: #ef4444; }
+    .upload-chip .uc-name { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .upload-chip .uc-size { color: #6b7280; font-variant-numeric: tabular-nums; }
+    .upload-chip .uc-x { background: #334155; color: #cbd5e1; border: none; border-radius: 999px; width: 18px; height: 18px; cursor: pointer; font-size: 0.7rem; line-height: 1; padding: 0; }
+    .upload-chip .uc-x:hover { background: #475569; color: white; }
+    #input-area.drag-over { outline: 2px dashed #60a5fa; outline-offset: -4px; border-radius: 8px; }
+    #mic-btn.recording { background: #b91c1c; color: #fff; border-color: #ef4444; animation: mic-pulse 1.2s infinite; }
+    @keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -111,12 +129,19 @@
   </div>
 
   <!-- Input -->
-  <div class="p-4 border-t border-gray-700">
+  <div id="input-area" class="p-4 border-t border-gray-700">
     <div id="plan-badge" class="hidden text-xs text-yellow-400 mb-1 flex items-center gap-1">
       <span>&#128736;</span> Plan mode <span class="text-gray-500">(shift+tab to toggle)</span>
     </div>
+    <div id="uploads-wrap" class="uploads-wrap" style="display:none;">
+      <div class="uploads-label">&#128206; Will attach to next message</div>
+      <div id="uploads-bar" class="uploads-bar"></div>
+    </div>
     <div class="flex gap-2">
-      <textarea id="input" rows="1" placeholder="Message Wright..."
+      <input type="file" id="file-input" multiple style="display:none">
+      <button id="attach-btn" class="attach-btn" title="Attach file">&#128206;</button>
+      <button id="mic-btn" class="attach-btn" title="Voice input" style="display:none">&#127908;</button>
+      <textarea id="input" rows="1" placeholder="Message Wright... (drop files here too)"
         class="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
         autocomplete="off"></textarea>
       <button id="send" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">Send</button>
@@ -740,19 +765,232 @@
     }
 
     function send() {
-      const content = inputEl.value.trim();
-      if (!content || !ws || ws.readyState !== 1) return;
-      if (content === '/clear') {
+      const text = inputEl.value.trim();
+      const uploaded = uploads.filter(u => u.status === 'done');
+      if (!text && uploaded.length === 0) return;
+      if (!ws || ws.readyState !== 1) return;
+      if (text === '/clear') {
         inputEl.value = '';
         autoResize();
         clearSession();
         return;
       }
+      let content = text;
+      if (uploaded.length > 0) {
+        const lines = uploaded.map(u => `Attached: ${u.path} (${u.originalName}, ${formatSize(u.size)})`);
+        content = lines.join('\n') + (text ? '\n\n' + text : '');
+      }
       ws.send(JSON.stringify({ type: 'message', content, planMode }));
       inputEl.value = '';
       autoResize();
+      clearUploads();
       if (planMode) togglePlanMode();
     }
+
+    // --- File Uploads ---
+    const uploads = []; // { id, originalName, size, status, path, chipEl }
+    let uploadIdSeq = 0;
+    const uploadsBar = document.getElementById('uploads-bar');
+    const uploadsWrap = document.getElementById('uploads-wrap');
+    const fileInput = document.getElementById('file-input');
+    const attachBtn = document.getElementById('attach-btn');
+    const inputArea = document.getElementById('input-area');
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + 'B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+      return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+    }
+
+    function refreshUploadsBar() {
+      uploadsWrap.style.display = uploads.length > 0 ? 'block' : 'none';
+    }
+
+    function clearUploads() {
+      for (const u of uploads) u.chipEl?.remove();
+      uploads.length = 0;
+      refreshUploadsBar();
+    }
+
+    function removeUpload(id) {
+      const idx = uploads.findIndex(u => u.id === id);
+      if (idx === -1) return;
+      uploads[idx].chipEl?.remove();
+      uploads.splice(idx, 1);
+      refreshUploadsBar();
+    }
+
+    function makeChip(upload) {
+      const chip = document.createElement('span');
+      chip.className = 'upload-chip uploading';
+      chip.innerHTML = `
+        <span class="uc-check">&#10003;</span>
+        <span class="uc-name"></span>
+        <span class="uc-size">uploading…</span>
+        <button class="uc-x" title="Remove">&times;</button>
+      `;
+      chip.querySelector('.uc-name').textContent = upload.originalName;
+      chip.querySelector('.uc-x').addEventListener('click', () => removeUpload(upload.id));
+      uploadsBar.appendChild(chip);
+      refreshUploadsBar();
+      return chip;
+    }
+
+    async function uploadFile(file) {
+      const id = ++uploadIdSeq;
+      const upload = { id, originalName: file.name, size: file.size, status: 'uploading' };
+      upload.chipEl = makeChip(upload);
+      uploads.push(upload);
+
+      try {
+        const buf = await file.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        const res = await fetch(`/api/upload?token=${TOKEN}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, contentBase64: b64 }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'upload failed');
+        upload.status = 'done';
+        upload.path = data.path;
+        upload.size = data.size;
+        upload.chipEl.classList.remove('uploading');
+        upload.chipEl.querySelector('.uc-size').textContent = formatSize(data.size);
+      } catch (err) {
+        console.error('Upload failed:', err);
+        upload.status = 'error';
+        upload.chipEl.classList.remove('uploading');
+        upload.chipEl.classList.add('error');
+        upload.chipEl.querySelector('.uc-size').textContent = 'error';
+        upload.chipEl.title = err.message;
+      }
+    }
+
+    function arrayBufferToBase64(buf) {
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(bin);
+    }
+
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      for (const f of fileInput.files) uploadFile(f);
+      fileInput.value = '';
+    });
+
+    // Drag and drop on input area
+    ['dragenter', 'dragover'].forEach(ev => {
+      inputArea.addEventListener(ev, (e) => {
+        if (!e.dataTransfer?.types?.includes('Files')) return;
+        e.preventDefault();
+        inputArea.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      inputArea.addEventListener(ev, (e) => {
+        if (ev === 'drop' && !e.dataTransfer?.types?.includes('Files')) return;
+        e.preventDefault();
+        inputArea.classList.remove('drag-over');
+      });
+    });
+    inputArea.addEventListener('drop', (e) => {
+      if (!e.dataTransfer?.files?.length) return;
+      for (const f of e.dataTransfer.files) uploadFile(f);
+    });
+
+    // --- Voice input (record → server-side gpt-4o-transcribe) ---
+    const micBtn = document.getElementById('mic-btn');
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recording = false;
+    let micStream = null;
+
+    // Only show the mic if the browser can record audio
+    if (navigator.mediaDevices?.getUserMedia && window.MediaRecorder) {
+      micBtn.style.display = '';
+      micBtn.addEventListener('click', toggleRecording);
+    }
+
+    async function toggleRecording() {
+      if (recording) {
+        stopRecording();
+        return;
+      }
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        console.warn('Mic access denied:', err);
+        alert('Microphone access denied. Enable it in your browser settings.');
+        return;
+      }
+      audioChunks = [];
+      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      mediaRecorder = new MediaRecorder(micStream, mime ? { mimeType: mime } : undefined);
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = handleRecordingStop;
+      mediaRecorder.start();
+      recording = true;
+      micBtn.classList.add('recording');
+      micBtn.title = 'Stop & transcribe';
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && recording) {
+        try { mediaRecorder.stop(); } catch {}
+      }
+      recording = false;
+      micBtn.classList.remove('recording');
+      micStream?.getTracks().forEach(t => t.stop());
+    }
+
+    async function handleRecordingStop() {
+      if (!audioChunks.length) return;
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      micBtn.disabled = true;
+      micBtn.textContent = '⏳'; // hourglass
+      micBtn.title = 'Transcribing...';
+      try {
+        const buf = await blob.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        const res = await fetch(`/api/transcribe?token=${TOKEN}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audioBase64: b64, mimeType: blob.type }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || 'transcription failed');
+        const existing = inputEl.value.trim();
+        const sep = existing && !existing.endsWith(' ') ? ' ' : '';
+        inputEl.value = existing + sep + data.text;
+        autoResize();
+        inputEl.focus();
+      } catch (err) {
+        console.error('Transcription failed:', err);
+        alert('Transcription failed: ' + err.message);
+      } finally {
+        micBtn.disabled = false;
+        micBtn.textContent = '🎤'; // mic
+        micBtn.title = 'Voice input';
+      }
+    }
+
+    // Paste files (e.g. screenshots) into the textarea
+    inputEl.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) uploadFile(f);
+        }
+      }
+    });
 
     sendBtn.addEventListener('click', send);
     inputEl.addEventListener('input', autoResize);

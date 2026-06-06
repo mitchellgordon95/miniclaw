@@ -3,13 +3,15 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFile } from 'fs/promises';
 
 import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId } from './lib/claude.js';
-import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, downloadTwilioImage } from './lib/channels.js';
+import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
+import { geminiQuery } from './lib/gemini.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -198,8 +200,76 @@ events.on('error', (message) => {
 // --- HTTP Routes ---
 
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(join(__dirname, 'public')));
+
+// --- File Uploads ---
+
+const uploadsDir = join(config.workspacePath, 'uploads');
+mkdirSync(uploadsDir, { recursive: true });
+
+function sanitizeFilename(name) {
+  // Keep base + extension, strip path separators and weird chars
+  const base = (name || 'upload').split(/[\\/]/).pop();
+  return base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'upload';
+}
+
+app.post('/api/upload', async (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const { filename, contentBase64 } = req.body || {};
+  if (!filename || !contentBase64) {
+    return res.status(400).json({ error: 'filename and contentBase64 required' });
+  }
+  try {
+    const buf = Buffer.from(contentBase64, 'base64');
+    if (buf.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ error: 'file too large (>25mb)' });
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const safe = sanitizeFilename(filename);
+    const saved = `${ts}-${safe}`;
+    const fullPath = join(uploadsDir, saved);
+    await writeFile(fullPath, buf);
+    res.json({
+      ok: true,
+      path: fullPath,
+      relativePath: `uploads/${saved}`,
+      size: buf.length,
+      originalName: filename,
+    });
+  } catch (err) {
+    console.error('[upload] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/transcribe', async (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const { audioBase64, mimeType } = req.body || {};
+  if (!audioBase64) {
+    return res.status(400).json({ error: 'audioBase64 required' });
+  }
+  try {
+    const buf = Buffer.from(audioBase64, 'base64');
+    if (buf.length > 25 * 1024 * 1024) {
+      return res.status(413).json({ error: 'audio too large (>25mb)' });
+    }
+    const ct = mimeType || 'audio/webm';
+    const ext = ct.includes('ogg') ? 'ogg'
+      : ct.includes('mp4') ? 'mp4'
+      : ct.includes('mpeg') || ct.includes('mp3') ? 'mp3'
+      : ct.includes('wav') ? 'wav'
+      : 'webm';
+    const transcript = await transcribeAudioBuffer(buf, ext, ct);
+    if (transcript === null) {
+      return res.status(502).json({ error: 'transcription failed (check OPENAI_API_KEY / logs)' });
+    }
+    res.json({ ok: true, text: transcript });
+  } catch (err) {
+    console.error('[transcribe] endpoint error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/messages', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
@@ -246,6 +316,7 @@ app.get('/api/messages', async (req, res) => {
 
 app.post('/api/clear', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  abortCurrent();
   const sessionId = getSessionId();
   if (sessionId) {
     try {
@@ -397,6 +468,51 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'sms', from: meta.from };
   } else if (channel === 'web') {
     lastRoute = { channel: 'web' };
+  }
+
+  // /gemini intercept: forward verbatim to Gemini, never touches Anthropic SDK or session history.
+  const trimmed = displayText.trim();
+  if (trimmed === '/gemini' || trimmed.startsWith('/gemini ')) {
+    const prompt = trimmed.slice('/gemini'.length).trim();
+    if (!prompt) {
+      const help = 'Usage: /gemini <your prompt>\nForwards verbatim to Gemini. No Anthropic context, no history.';
+      if (isUserFacing) {
+        broadcast({ type: 'typing', active: false });
+        broadcast({ type: 'stream_end', channel, content: help });
+      }
+      await sendReply(channel, help, { lastRoute });
+      return;
+    }
+
+    if (isUserFacing) {
+      broadcast({
+        type: 'message',
+        role: 'user',
+        channel,
+        content: displayText,
+        hasImages: false,
+        ts: new Date().toISOString(),
+      });
+      broadcast({ type: 'typing', active: true });
+    }
+
+    try {
+      const response = await geminiQuery(prompt);
+      if (isUserFacing) {
+        broadcast({ type: 'typing', active: false });
+        broadcast({ type: 'stream_end', channel, content: response });
+      }
+      await sendReply(channel, response, { lastRoute });
+    } catch (err) {
+      console.error('[gemini] error:', err.message);
+      const msg = `Gemini error: ${err.message}`;
+      if (isUserFacing) {
+        broadcast({ type: 'typing', active: false });
+        broadcast({ type: 'stream_end', channel, content: msg });
+      }
+      await sendReply(channel, msg, { lastRoute });
+    }
+    return;
   }
 
   // Track current turn channel for routing responses
