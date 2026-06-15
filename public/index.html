@@ -176,6 +176,7 @@
     document.getElementById('change-token').addEventListener('click', changeToken);
 
     let ws = null;
+    let reconnectTimer = null;
     let streamEl = null;
     let streamContent = '';
     let generating = false;
@@ -522,6 +523,7 @@
     let everConnected = false;
     function connect() {
       if (!TOKEN) return;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       let thisConnected = false;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${TOKEN}`);
@@ -545,7 +547,8 @@
         statusEl.textContent = 'reconnecting...';
         statusEl.className = 'text-xs text-yellow-500';
         statusEl.onclick = null;
-        setTimeout(connect, 3000);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, 3000);
       };
 
       let currentChannel = 'web';
@@ -554,7 +557,7 @@
         const data = JSON.parse(e.data);
 
         if (data.type === 'message') {
-          if (data.role === 'user') currentChannel = data.channel || 'web';
+          if (data.role === 'user') { currentChannel = data.channel || 'web'; confirmPendingSend(data.content); }
           addMessage(data);
           scrollToBottom();
         } else if (data.type === 'stream_end') {
@@ -578,6 +581,7 @@
           playDoneSound();
           scrollToBottom();
         } else if (data.type === 'delta') {
+          confirmPendingSend(); // server is responding -> our message landed
           activeToolPanel = null; // Text started, finalize any tool panel
           if (!streamEl) {
             streamEl = createMessageEl({ role: 'assistant', channel: currentChannel || 'web' });
@@ -764,11 +768,37 @@
       }
     }
 
+    // --- Outgoing message reliability ---
+    // The socket can read OPEN but be dead (e.g. laptop slept). In that case
+    // ws.send() silently drops the message. We optimistically clear the input
+    // but keep the text until the server echoes it back; if no echo arrives we
+    // restore it instead of losing it.
+    let pendingSend = null; // { content, text, timer }
+
+    function connNotice(msg, kind) {
+      statusEl.textContent = msg;
+      statusEl.className = 'text-xs ' + (kind === 'error' ? 'text-red-500' : kind === 'warn' ? 'text-yellow-500' : 'text-green-500');
+    }
+
+    function confirmPendingSend(echoContent) {
+      if (!pendingSend) return;
+      // Confirm on exact echo match, or on any server activity if we can't match.
+      if (echoContent === undefined || pendingSend.content === echoContent) {
+        clearTimeout(pendingSend.timer);
+        pendingSend = null;
+      }
+    }
+
+    function forceReconnect() {
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (ws) { try { ws.onclose = null; ws.close(); } catch {} }
+      connect();
+    }
+
     function send() {
       const text = inputEl.value.trim();
       const uploaded = uploads.filter(u => u.status === 'done');
       if (!text && uploaded.length === 0) return;
-      if (!ws || ws.readyState !== 1) return;
       if (text === '/clear') {
         inputEl.value = '';
         autoResize();
@@ -780,11 +810,43 @@
         const lines = uploaded.map(u => `Attached: ${u.path} (${u.originalName}, ${formatSize(u.size)})`);
         content = lines.join('\n') + (text ? '\n\n' + text : '');
       }
-      ws.send(JSON.stringify({ type: 'message', content, planMode }));
+
+      // Connection guard: socket not open -> keep the message, reconnect, bail.
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connNotice('disconnected — message kept, reconnecting…', 'error');
+        forceReconnect();
+        return; // do NOT clear input
+      }
+
+      try {
+        ws.send(JSON.stringify({ type: 'message', content, planMode }));
+      } catch (err) {
+        connNotice('send failed — message kept, reconnecting…', 'error');
+        forceReconnect();
+        return; // do NOT clear input
+      }
+
+      // Optimistically clear, but track until the server confirms (echoes it back
+      // or starts responding). If neither happens, the socket was dead -> restore.
       inputEl.value = '';
       autoResize();
       clearUploads();
       if (planMode) togglePlanMode();
+
+      if (pendingSend) clearTimeout(pendingSend.timer);
+      pendingSend = {
+        content,
+        text,
+        timer: setTimeout(() => {
+          pendingSend = null;
+          if (!inputEl.value.trim()) { // don't clobber anything newly typed
+            inputEl.value = text;
+            autoResize();
+          }
+          connNotice('message didn\'t send — restored, hit enter to retry', 'error');
+          forceReconnect();
+        }, 7000),
+      };
     }
 
     // --- File Uploads ---
@@ -1020,6 +1082,18 @@
         modelEl.className = 'text-xs ' + (auth === 'max' ? 'text-green-600' : 'text-yellow-500');
       } catch {}
     }
+
+    // --- Reconnect proactively when the tab wakes / network returns ---
+    // Handles the laptop-sleep case: the old socket is dead, so reconnect before
+    // the user tries to send (and the send() ack-timeout is the backstop).
+    function wakeCheck() {
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        forceReconnect();
+      }
+    }
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) wakeCheck(); });
+    window.addEventListener('focus', wakeCheck);
+    window.addEventListener('online', forceReconnect);
 
     // --- Init ---
     loadHistory();
