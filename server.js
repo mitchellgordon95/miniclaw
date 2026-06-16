@@ -92,7 +92,7 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'message' && msg.content) {
-        await handleMessage('web', msg.content, { planMode: msg.planMode || false });
+        await handleMessage('web', msg.content, { planMode: msg.planMode || false, effort: msg.effort });
       } else if (msg.type === 'stop') {
         const stopped = abortCurrent();
         if (stopped) console.log('[web] Generation stopped by user');
@@ -622,12 +622,20 @@ async function handleMessage(channel, content, meta = {}) {
     broadcast({ type: 'typing', active: true });
   }
 
+  // Reasoning effort: caller-provided (the LP3 voice app sends 'low' for speed), overridden
+  // to 'high' when the user explicitly asks the model to think harder.
+  let effort = meta.effort || null;
+  if (/\b(think hard|think harder|think carefully|think deeply|deep think|take your time|ultrathink|reason carefully)\b/i.test(displayText)) {
+    effort = 'high';
+  }
+
   // Push message into the persistent session, then broadcast to UI
   try {
     await sendMessage(content, {
       channel,
       planMode: meta.planMode || false,
       model: meta.model || null,
+      effort,
     });
     // Broadcast user message only after SDK has persisted it
     if (isUserFacing) {
