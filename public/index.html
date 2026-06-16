@@ -141,6 +141,12 @@
       <input type="file" id="file-input" multiple style="display:none">
       <button id="attach-btn" class="attach-btn" title="Attach file">&#128206;</button>
       <button id="mic-btn" class="attach-btn" title="Voice input" style="display:none">&#127908;</button>
+      <select id="effort" title="Reasoning effort for this message" class="bg-gray-800 text-gray-300 text-sm rounded-lg px-2 outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">Effort: Auto</option>
+        <option value="low">Low</option>
+        <option value="high">High</option>
+        <option value="max">Max</option>
+      </select>
       <textarea id="input" rows="1" placeholder="Message Wright... (drop files here too)"
         class="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
         autocomplete="off"></textarea>
@@ -819,7 +825,8 @@
       }
 
       try {
-        ws.send(JSON.stringify({ type: 'message', content, planMode }));
+        const effort = document.getElementById('effort')?.value || undefined;
+        ws.send(JSON.stringify({ type: 'message', content, planMode, ...(effort ? { effort } : {}) }));
       } catch (err) {
         connNotice('send failed — message kept, reconnecting…', 'error');
         forceReconnect();
