@@ -10,7 +10,7 @@ import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sd
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
 import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId } from './lib/claude.js';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage, loadResendCreds } from './lib/channels.js';
+import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage, loadResendCreds, synthesizeSpeech } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
 import { geminiQuery } from './lib/gemini.js';
 
@@ -271,6 +271,28 @@ app.post('/api/transcribe', async (req, res) => {
     res.json({ ok: true, text: transcript });
   } catch (err) {
     console.error('[transcribe] endpoint error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/tts', async (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  const { text, voice } = req.body || {};
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'text required' });
+  }
+  if (text.length > 4000) {
+    return res.status(413).json({ error: 'text too long (>4000 chars)' });
+  }
+  try {
+    const audio = await synthesizeSpeech(text, voice || 'alloy');
+    if (audio === null) {
+      return res.status(502).json({ error: 'tts failed (check OPENAI_API_KEY / logs)' });
+    }
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(audio);
+  } catch (err) {
+    console.error('[tts] endpoint error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
