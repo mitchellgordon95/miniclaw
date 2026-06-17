@@ -84,7 +84,14 @@ function checkAuth(req) {
 
 const clients = new Set();
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // Tag the client's channel from the connect URL (?channel=phone). The web UI omits it and
+  // defaults to 'web'. This both routes the model's responses back to the right client and tells
+  // Wright which surface the message came from.
+  try {
+    const u = new URL(req.url, `http://${req.headers.host}`);
+    ws.channel = u.searchParams.get('channel') === 'phone' ? 'phone' : 'web';
+  } catch { ws.channel = 'web'; }
   clients.add(ws);
   ws.on('close', () => clients.delete(ws));
 
@@ -92,10 +99,10 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data);
       if (msg.type === 'message' && msg.content) {
-        await handleMessage('web', msg.content, { planMode: msg.planMode || false, effort: msg.effort });
+        await handleMessage(ws.channel, msg.content, { planMode: msg.planMode || false, effort: msg.effort });
       } else if (msg.type === 'stop') {
         const stopped = abortCurrent();
-        if (stopped) console.log('[web] Generation stopped by user');
+        if (stopped) console.log(`[${ws.channel}] Generation stopped by user`);
       } else if (msg.type === 'answer') {
         answerQuestion(msg.answers);
       }
@@ -127,7 +134,12 @@ server.on('upgrade', (req, socket, head) => {
 function broadcast(data) {
   const msg = JSON.stringify(data);
   for (const ws of clients) {
-    if (ws.readyState === 1) ws.send(msg);
+    if (ws.readyState !== 1) continue;
+    const ch = ws.channel || 'web';
+    // The web UI is the dashboard and sees every turn; a non-web client (the phone) only
+    // receives streams for turns it originated, so chatting on the web never makes the phone
+    // speak, and vice-versa.
+    if (ch === 'web' || ch === currentTurnChannel) ws.send(msg);
   }
 }
 
@@ -560,7 +572,7 @@ app.get('/health', (req, res) => {
 // --- Core Orchestration ---
 
 async function handleMessage(channel, content, meta = {}) {
-  const isUserFacing = channel === 'web' || channel === 'sms';
+  const isUserFacing = channel === 'web' || channel === 'sms' || channel === 'phone';
 
   // Extract text for display/recording (content may be string or content block array)
   const displayText = typeof content === 'string'
@@ -575,6 +587,8 @@ async function handleMessage(channel, content, meta = {}) {
     lastRoute = { channel: 'sms', from: meta.from };
   } else if (channel === 'web') {
     lastRoute = { channel: 'web' };
+  } else if (channel === 'phone') {
+    lastRoute = { channel: 'phone' };
   } else if (channel === 'email') {
     lastRoute = { channel: 'email', from: meta.from, subject: meta.subject };
   }
@@ -629,7 +643,7 @@ async function handleMessage(channel, content, meta = {}) {
   currentTurnContent = '';
 
   // Record channel for history rendering
-  if (channel === 'sms' || channel === 'web') {
+  if (channel === 'sms' || channel === 'web' || channel === 'phone') {
     recordChannel(channel, displayText);
   }
 
