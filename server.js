@@ -136,7 +136,15 @@ function broadcast(data) {
 let currentTurnContent = '';
 let currentTurnChannel = 'web';
 
+// --- Latency profiling ---
+let turnStartMs = 0;      // set when a user message is handed to the SDK
+let turnFirstDeltaMs = 0; // set on the first delta of the turn
+
 events.on('delta', (text) => {
+  if (turnStartMs && !turnFirstDeltaMs) {
+    turnFirstDeltaMs = Date.now();
+    console.log(`[timing] TTFT ${turnFirstDeltaMs - turnStartMs}ms`);
+  }
   currentTurnContent += text;
   broadcast({ type: 'delta', text });
 });
@@ -172,6 +180,14 @@ events.on('ask_user', (questions) => {
 events.on('turn_end', async (content) => {
   const fullResponse = content || currentTurnContent;
   const channel = currentTurnChannel;
+
+  if (turnStartMs) {
+    const total = Date.now() - turnStartMs;
+    const ttft = turnFirstDeltaMs ? turnFirstDeltaMs - turnStartMs : null;
+    console.log(`[timing] turn total ${total}ms (TTFT ${ttft === null ? 'n/a' : ttft + 'ms'}, channel ${channel}, ${fullResponse.length} chars)`);
+    turnStartMs = 0;
+    turnFirstDeltaMs = 0;
+  }
 
   broadcast({ type: 'typing', active: false });
   broadcast({ type: 'stream_end', channel, content: fullResponse });
@@ -630,6 +646,8 @@ async function handleMessage(channel, content, meta = {}) {
   }
 
   // Push message into the persistent session, then broadcast to UI
+  turnStartMs = Date.now();
+  turnFirstDeltaMs = 0;
   try {
     await sendMessage(content, {
       channel,

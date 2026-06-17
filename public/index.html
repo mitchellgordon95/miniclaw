@@ -232,7 +232,7 @@
         historyTotal = data.total;
         messagesEl.innerHTML = '';
         for (const msg of data.messages) renderSessionMessage(msg);
-        requestAnimationFrame(() => scrollToBottom());
+        scrollToBottomSoon();
       } catch (e) {
         console.error('Failed to load history:', e);
       }
@@ -264,6 +264,7 @@
     }
 
     messagesEl.addEventListener('scroll', () => {
+      stickToBottom = isNearBottom();
       if (messagesEl.scrollTop < 100 && historyOffset > 0 && !loadingMore) {
         loadMore();
       }
@@ -565,6 +566,7 @@
         if (data.type === 'message') {
           if (data.role === 'user') { currentChannel = data.channel || 'web'; confirmPendingSend(data.content); }
           addMessage(data);
+          stickToBottom = true; // a new message bubble: snap to it
           scrollToBottom();
         } else if (data.type === 'stream_end') {
           if (streamEl) {
@@ -585,7 +587,7 @@
           // Clear any lingering agent chips
           for (const [id] of activeAgents) removeAgent(id);
           playDoneSound();
-          scrollToBottom();
+          scrollIfStuck();
         } else if (data.type === 'delta') {
           confirmPendingSend(); // server is responding -> our message landed
           activeToolPanel = null; // Text started, finalize any tool panel
@@ -598,7 +600,7 @@
           const contentEl = streamEl.querySelector('.content');
           contentEl.className = 'content md-content';
           contentEl.innerHTML = renderMarkdown(streamContent);
-          scrollToBottom();
+          scrollIfStuck();
         } else if (data.type === 'tool_start') {
           finalizeStream();
           if (!activeToolPanel) {
@@ -606,14 +608,14 @@
             messagesEl.appendChild(activeToolPanel);
           }
           addToolLine(activeToolPanel, data.name, data.input);
-          scrollToBottom();
+          scrollIfStuck();
         } else if (data.type === 'tool_result') {
           // Tool result — panel already has the line
-          scrollToBottom();
+          scrollIfStuck();
         } else if (data.type === 'plan') {
           activeToolPanel = null;
           messagesEl.appendChild(createPlanCard(data.content));
-          scrollToBottom();
+          scrollIfStuck();
         } else if (data.type === 'status') {
           const dots = document.getElementById('typing-dots');
           const statusEl = document.getElementById('typing-status');
@@ -637,7 +639,7 @@
             statusEl.textContent = '';
           }
           setGenerating(data.active);
-          if (data.active) scrollToBottom();
+          if (data.active) scrollIfStuck();
         } else if (data.type === 'ask_user') {
           activeToolPanel = null;
           const card = createQuestionCard(data.questions);
@@ -703,8 +705,26 @@
       messagesEl.appendChild(el);
     }
 
+    // Auto-scroll only when the user is already parked at the bottom, so streaming
+    // chunks don't yank the scrollbar away while they're reading earlier text.
+    let stickToBottom = true;
+    function isNearBottom() {
+      return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    }
     function scrollToBottom() {
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    function scrollIfStuck() {
+      if (stickToBottom) scrollToBottom();
+    }
+    // On initial load, markdown/images settle over a few frames, so a single scroll
+    // lands short. Retry across frames + a couple timeouts to actually hit bottom.
+    function scrollToBottomSoon() {
+      stickToBottom = true;
+      scrollToBottom();
+      requestAnimationFrame(() => requestAnimationFrame(scrollToBottom));
+      setTimeout(scrollToBottom, 120);
+      setTimeout(scrollToBottom, 350);
     }
 
     function escapeHtml(text) {
