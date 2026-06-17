@@ -8,7 +8,7 @@ import { writeFile } from 'fs/promises';
 
 import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId } from './lib/claude.js';
+import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId, getContextTokens, resetContextStats } from './lib/claude.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage, loadResendCreds, synthesizeSpeech } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
@@ -30,6 +30,20 @@ const startTime = Date.now();
 // --- Last Route (where to auto-reply) ---
 
 let lastRoute = { channel: 'web' };
+
+// --- Context handoff ---
+// When the conversation grows past this many tokens, Wright proactively offers to checkpoint
+// durable knowledge into the wiki and reset (Mitchell confirms via /reset). See AGENTS.md.
+const HANDOFF_THRESHOLD = 100_000;
+const HANDOFF_REMIND_EVERY = 50_000; // re-offer every +50k if he keeps going without resetting
+let nextHandoffSuggestAt = HANDOFF_THRESHOLD;
+let pendingHandoffNudge = false;
+
+function resetHandoffState() {
+  nextHandoffSuggestAt = HANDOFF_THRESHOLD;
+  pendingHandoffNudge = false;
+  resetContextStats();
+}
 
 // --- Channel metadata (persisted for history rendering) ---
 
@@ -212,6 +226,15 @@ events.on('turn_end', async (content) => {
   }
 
   currentTurnContent = '';
+});
+
+events.on('usage', ({ contextTokens }) => {
+  broadcast({ type: 'context', tokens: contextTokens, threshold: HANDOFF_THRESHOLD });
+  if (contextTokens >= nextHandoffSuggestAt) {
+    pendingHandoffNudge = true;
+    nextHandoffSuggestAt = Math.ceil((contextTokens + 1) / HANDOFF_REMIND_EVERY) * HANDOFF_REMIND_EVERY;
+    console.log(`[handoff] context ~${Math.round(contextTokens / 1000)}k tokens — arming handoff suggestion`);
+  }
 });
 
 events.on('abort', () => {
@@ -445,6 +468,7 @@ app.post('/api/clear', async (req, res) => {
     }
     saveSessionId('');
   }
+  resetHandoffState();
   res.json({ ok: true });
 });
 
@@ -559,6 +583,8 @@ app.get('/api/status', (req, res) => {
     apiKeySource: init.apiKeySource,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     sessionId: getSessionId(),
+    contextTokens: getContextTokens(),
+    handoffThreshold: HANDOFF_THRESHOLD,
   });
 });
 
@@ -595,6 +621,28 @@ async function handleMessage(channel, content, meta = {}) {
 
   // /gemini intercept: forward verbatim to Gemini, never touches Anthropic SDK or session history.
   const trimmed = displayText.trim();
+
+  // /reset: the checkpoint is done — clear the session so the next message starts fresh. The new
+  // session rebootstraps from AGENTS.md (always in the system prompt) and reads handoff.md for
+  // where we left off. Mitchell-confirmed, per the Context Handoff Protocol.
+  if (trimmed === '/reset') {
+    abortCurrent();
+    const sid = getSessionId();
+    if (sid) {
+      try { await deleteSession(sid, { dir: config.workspacePath }); }
+      catch (e) { console.error('[reset] deleteSession:', e.message); }
+      saveSessionId('');
+    }
+    resetHandoffState();
+    const note = 'Session reset. Fresh context. Next message rebootstraps from AGENTS.md + handoff.md.';
+    if (isUserFacing) {
+      broadcast({ type: 'typing', active: false });
+      broadcast({ type: 'stream_end', channel, content: note });
+    }
+    await sendReply(channel, note, { lastRoute });
+    return;
+  }
+
   if (trimmed === '/gemini' || trimmed.startsWith('/gemini ')) {
     const prompt = trimmed.slice('/gemini'.length).trim();
     if (!prompt) {
@@ -659,11 +707,33 @@ async function handleMessage(channel, content, meta = {}) {
     effort = 'high';
   }
 
+  // Build the content the agent sees. We may prepend one-time directives (invisible to Mitchell,
+  // who only sees `displayText`): a handoff-protocol pointer when he runs /handoff, and a nudge to
+  // offer a checkpoint once context passes the threshold.
+  const directives = [];
+  if (trimmed === '/handoff' || trimmed.startsWith('/handoff ')) {
+    directives.push('[Mitchell asked for a context handoff. Follow the "Context Handoff Protocol" in AGENTS.md now: review this session for durable knowledge, propose what goes to the wiki/memory vs a short handoff.md note vs gets dropped, ask him to confirm the split and his intent going forward, then write + commit + push the workspace and tell him to run /reset.]');
+  }
+  if (pendingHandoffNudge) {
+    pendingHandoffNudge = false;
+    directives.push(`[System note, not from Mitchell: the conversation is at ~${Math.round(getContextTokens() / 1000)}k tokens, past the ${HANDOFF_THRESHOLD / 1000}k checkpoint threshold. After you answer his message, add one short sentence offering to checkpoint to the wiki and reset when he's ready (he runs /handoff). Do not run the handoff unprompted.]`);
+  }
+  let contentForAgent = content;
+  if (directives.length) {
+    const note = directives.join('\n');
+    if (typeof content === 'string') {
+      contentForAgent = `${note}\n\n${content}`;
+    } else if (Array.isArray(content)) {
+      const firstText = content.findIndex((b) => b.type === 'text');
+      contentForAgent = content.map((b, i) => (i === firstText ? { ...b, text: `${note}\n\n${b.text}` } : b));
+    }
+  }
+
   // Push message into the persistent session, then broadcast to UI
   turnStartMs = Date.now();
   turnFirstDeltaMs = 0;
   try {
-    await sendMessage(content, {
+    await sendMessage(contentForAgent, {
       channel,
       planMode: meta.planMode || false,
       model: meta.model || null,
