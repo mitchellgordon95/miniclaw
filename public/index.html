@@ -41,6 +41,19 @@
     code.chord-inline { cursor: pointer; color: #93c5fd; border: 1px solid #334155; }
     code.chord-inline:hover { background: #334155; }
     code.chord-inline.chord-playing { background: #2563eb; color: #fff; }
+    .chord-rest { color: #475569; background: transparent; border: none; cursor: default; padding: 3px 2px; font-family: ui-monospace, monospace; font-size: 0.85em; }
+    .chord-hint { flex-basis: 100%; color: #94a3b8; font-size: 0.75em; font-style: italic; }
+    .chord-chip.chord-mystery { background: #312e81; color: #c7d2fe; border-color: #4338ca; }
+    .chord-chip.chord-right { background: #14532d; color: #86efac; border-color: #22c55e; }
+    .chord-chip.chord-wrong { background: #450a0a; color: #fca5a5; border-color: #b91c1c; }
+    .chord-quiz-controls { flex-basis: 100%; display: flex; gap: 6px; margin-top: 4px; align-items: center; }
+    .chord-quiz-controls input { flex: 1; min-width: 120px; background: #1e293b; border: 1px solid #334155; border-radius: 5px; padding: 3px 8px; color: #e2e8f0; font-size: 0.8em; font-family: ui-monospace, monospace; outline: none; }
+    .chord-quiz-controls input:focus { border-color: #3b82f6; }
+    .chord-quiz-btn { background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd; border-radius: 5px; padding: 3px 10px; font-size: 0.8em; cursor: pointer; white-space: nowrap; }
+    .chord-quiz-btn:hover { background: #1d4ed8; color: #fff; }
+    .chord-quiz-feedback { font-size: 0.8em; color: #94a3b8; white-space: nowrap; }
+    /* Never show a quiz answer as raw text, even mid-stream before enhancement */
+    pre:has(code.language-chords-quiz) { filter: blur(8px); user-select: none; }
     .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
     .md-content li { margin: 0.2em 0; }
     .md-content a { color: #60a5fa; text-decoration: underline; }
@@ -193,6 +206,9 @@
 
     // --- Playable chords ---
     // ```chords blocks and inline `chord:Xy` code render as clickable chips synthesized via Web Audio.
+    // Tokens: chord symbols (C, Dm7, C/G), explicit voicings [C3 E3 G3 C4], single melody notes (E4),
+    // rests (_), any of them with a :beats duration suffix (E4:0.5, Cmaj7:4; default 2 beats).
+    // ```chords-quiz blocks hide the answer behind "?" chips with a guess box for ear training.
     const NOTE_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
     const CHORD_QUALITIES = {
       '': [0,4,7], 'maj': [0,4,7], 'm': [0,3,7], 'dim': [0,3,6], 'dim7': [0,3,6,9],
@@ -202,20 +218,61 @@
       'add9': [0,4,7,14], 'sus2': [0,2,7], 'sus4': [0,5,7], '7sus4': [0,5,7,10],
       '11': [0,4,7,10,14,17], '13': [0,4,7,10,14,21],
     };
+    const CHORD_TOKEN_RE = /\[[^\]]*\](?::[\d.]+)?|\S+/g;
+
+    const pitchClass = (name) => (NOTE_SEMITONES[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
+
+    function noteToMidi(name) {
+      const m = name.match(/^([A-G][#b]?)(\d)$/);
+      return m ? 12 * (+m[2] + 1) + pitchClass(m[1]) : null; // C4 = 60
+    }
 
     function parseChord(symbol) {
       const m = symbol.match(/^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/);
       if (!m) return null;
-      const pc = (name) => (NOTE_SEMITONES[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
       const quality = m[2]
         .replace(/[△Δ]/g, 'maj').replace(/M(?=7|9)/g, 'maj').replace(/min/g, 'm')
         .replace(/°/g, 'dim').replace(/ø/g, 'm7b5').replace(/\+/g, 'aug');
       const intervals = CHORD_QUALITIES[quality];
       if (!intervals) return null;
-      const rootMidi = 48 + pc(m[1]); // root voiced C3-B3
+      const rootMidi = 48 + pitchClass(m[1]); // root voiced C3-B3
       const notes = intervals.map((iv) => rootMidi + iv);
-      notes.unshift((m[3] ? 48 + pc(m[3]) : rootMidi) - 12); // bass an octave below
+      notes.unshift((m[3] ? 48 + pitchClass(m[3]) : rootMidi) - 12); // bass an octave below
       return notes;
+    }
+
+    // token -> {bar} | {rest, beats} | {notes, beats, label, single} | null
+    function parseToken(tok) {
+      if (tok === '|') return { bar: true };
+      let body = tok, beats = 2;
+      const dm = tok.match(/^(.+?):(\d*\.?\d+)$/);
+      if (dm) { body = dm[1]; beats = Math.min(16, Math.max(0.125, +dm[2])); }
+      if (body === '_') return { rest: true, beats };
+      const bm = body.match(/^\[([^\]]*)\]$/);
+      if (bm) {
+        const names = bm[1].trim().split(/[\s,]+/).filter(Boolean);
+        const notes = names.map(noteToMidi);
+        if (!notes.length || notes.some((n) => n === null)) return null;
+        return { notes, beats, label: names.join('·'), single: notes.length === 1 };
+      }
+      const midi = noteToMidi(body);
+      if (midi !== null) return { notes: [midi], beats, label: body, single: true };
+      const notes = parseChord(body);
+      return notes ? { notes, beats, label: body } : null;
+    }
+
+    // block text -> {tempo, hint, tokens: [{raw, parsed}]}
+    function parseChordBlock(text) {
+      let tempo = 80, hint = null;
+      const tokens = [];
+      for (const line of text.trim().split('\n')) {
+        const tm = line.match(/^\s*tempo:\s*(\d+)\s*$/i);
+        if (tm) { tempo = Math.min(300, Math.max(30, +tm[1])); continue; }
+        const hm = line.match(/^\s*hint:\s*(.+)$/i);
+        if (hm) { hint = hm[1].trim(); continue; }
+        for (const raw of line.match(CHORD_TOKEN_RE) || []) tokens.push({ raw, parsed: parseToken(raw) });
+      }
+      return { tempo, hint, tokens };
     }
 
     let audioCtx = null;
@@ -231,7 +288,7 @@
     }
 
     function scheduleChord(midiNotes, when, dur) {
-      const gainPerVoice = 0.5 / midiNotes.length;
+      const gainPerVoice = Math.min(0.3, 0.5 / midiNotes.length);
       for (const midi of midiNotes) {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -253,62 +310,166 @@
     }
 
     function playChords(items, tempo) {
-      // items: [{notes, el}]; each chord held 2 beats
+      // items: [{notes?, rest?, beats, el?}] played sequentially; rests advance time silently
       stopChords();
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      const dur = (60 / tempo) * 2;
+      const beat = 60 / tempo;
       const t0 = audioCtx.currentTime + 0.05;
-      items.forEach(({ notes, el }, i) => {
-        scheduleChord(notes, t0 + i * dur, dur);
-        if (el) {
-          chordTimeouts.push(setTimeout(() => el.classList.add('chord-playing'), i * dur * 1000 + 50));
-          chordTimeouts.push(setTimeout(() => el.classList.remove('chord-playing'), (i + 1) * dur * 1000 + 50));
+      let at = 0;
+      for (const it of items) {
+        const dur = beat * (it.beats || 2);
+        if (it.notes) {
+          scheduleChord(it.notes, t0 + at, dur);
+          if (it.el) {
+            const el = it.el;
+            chordTimeouts.push(setTimeout(() => el.classList.add('chord-playing'), at * 1000 + 50));
+            chordTimeouts.push(setTimeout(() => el.classList.remove('chord-playing'), (at + dur) * 1000 + 50));
+          }
         }
-      });
+        at += dur;
+      }
     }
 
-    function buildChordWidget(text) {
+    function chordWidgetShell(tempo, hint, sequence) {
       const widget = document.createElement('div');
       widget.className = 'chord-widget';
       widget.dataset.chordified = '1';
-      let tempo = 80;
-      const sequence = []; // {notes, el} in play order
       const playBtn = document.createElement('button');
       playBtn.className = 'chord-play';
       playBtn.textContent = '▶ play';
       playBtn.onclick = () => playChords(sequence, tempo);
       widget.appendChild(playBtn);
-      for (const line of text.trim().split('\n')) {
-        const tempoMatch = line.match(/^\s*tempo:\s*(\d+)\s*$/i);
-        if (tempoMatch) { tempo = Math.min(300, Math.max(30, +tempoMatch[1])); continue; }
-        for (const token of line.trim().split(/\s+/)) {
-          if (!token) continue;
-          if (token === '|') {
-            const bar = document.createElement('span');
-            bar.className = 'chord-bar';
-            bar.textContent = '|';
-            widget.appendChild(bar);
-            continue;
-          }
-          const chip = document.createElement('button');
-          chip.className = 'chord-chip';
-          chip.textContent = token;
-          const notes = parseChord(token);
-          if (notes) {
-            chip.onclick = () => playChords([{ notes, el: chip }], tempo);
-            sequence.push({ notes, el: chip });
-          } else {
-            chip.classList.add('chord-bad');
-            chip.title = 'unrecognized chord';
-          }
-          widget.appendChild(chip);
+      if (hint) {
+        const hintEl = document.createElement('span');
+        hintEl.className = 'chord-hint';
+        hintEl.textContent = hint;
+        widget.appendChild(hintEl);
+      }
+      return widget;
+    }
+
+    function appendStatic(widget, parsed, tempo, sequence, label) {
+      // bars and rests render the same in normal and quiz widgets
+      if (parsed.bar) {
+        const bar = document.createElement('span');
+        bar.className = 'chord-bar';
+        bar.textContent = '|';
+        widget.appendChild(bar);
+        return true;
+      }
+      if (parsed.rest) {
+        const rest = document.createElement('span');
+        rest.className = 'chord-rest';
+        rest.textContent = '·';
+        rest.title = 'rest';
+        widget.appendChild(rest);
+        sequence.push(parsed);
+        return true;
+      }
+      return false;
+    }
+
+    function buildChordWidget(text) {
+      const { tempo, hint, tokens } = parseChordBlock(text);
+      const sequence = [];
+      const widget = chordWidgetShell(tempo, hint, sequence);
+      for (const { raw, parsed } of tokens) {
+        if (parsed && appendStatic(widget, parsed, tempo, sequence)) continue;
+        const chip = document.createElement('button');
+        chip.className = 'chord-chip';
+        chip.textContent = parsed ? parsed.label : raw;
+        if (parsed) {
+          const item = { ...parsed, el: chip };
+          chip.onclick = () => playChords([item], tempo);
+          sequence.push(item);
+        } else {
+          chip.classList.add('chord-bad');
+          chip.title = 'unrecognized token';
         }
+        widget.appendChild(chip);
       }
       const tempoEl = document.createElement('span');
       tempoEl.className = 'chord-tempo';
       tempoEl.textContent = `${tempo} bpm`;
       widget.appendChild(tempoEl);
+      return widget;
+    }
+
+    // Ear-training comparison: octave-insensitive. Single notes match by pitch class;
+    // chords/voicings match by pitch-class set + lowest pitch class (so inversions must
+    // be answered as slash chords or voicings, but octave placement is forgiven).
+    function pcSetKey(notes) { return [...new Set(notes.map((n) => ((n % 12) + 12) % 12))].sort((a, b) => a - b).join(','); }
+    function bassPc(notes) { return ((Math.min(...notes) % 12) + 12) % 12; }
+
+    function tokenMatches(answer, guessRaw) {
+      if (answer.single) {
+        const m = guessRaw.match(/^([A-G][#b]?)(\d)?$/);
+        return !!m && pitchClass(m[1]) === answer.notes[0] % 12;
+      }
+      const g = parseToken(guessRaw);
+      if (!g || !g.notes) return false;
+      return pcSetKey(g.notes) === pcSetKey(answer.notes) && bassPc(g.notes) === bassPc(answer.notes);
+    }
+
+    function buildQuizWidget(text) {
+      const { tempo, hint, tokens } = parseChordBlock(text);
+      const sequence = [];
+      const guessables = []; // {parsed, chip}
+      const widget = chordWidgetShell(tempo, hint, sequence);
+      widget.classList.add('chord-quiz');
+      for (const { parsed } of tokens) {
+        if (!parsed) continue; // malformed tokens are silently dropped in quizzes
+        if (appendStatic(widget, parsed, tempo, sequence)) continue;
+        const chip = document.createElement('button');
+        chip.className = 'chord-chip chord-mystery';
+        chip.textContent = '?';
+        chip.title = 'play just this one';
+        const item = { ...parsed, el: chip };
+        chip.onclick = () => playChords([item], tempo);
+        sequence.push(item);
+        guessables.push({ parsed, chip });
+        widget.appendChild(chip);
+      }
+      const controls = document.createElement('div');
+      controls.className = 'chord-quiz-controls';
+      const input = document.createElement('input');
+      input.placeholder = `your guess: ${guessables.length} answer${guessables.length === 1 ? '' : 's'}, space-separated`;
+      const feedback = document.createElement('span');
+      feedback.className = 'chord-quiz-feedback';
+      let revealed = false;
+      const checkBtn = document.createElement('button');
+      checkBtn.className = 'chord-quiz-btn';
+      checkBtn.textContent = 'check';
+      checkBtn.onclick = () => {
+        if (revealed) return;
+        const guesses = (input.value.match(CHORD_TOKEN_RE) || []).filter((g) => g !== '|');
+        let right = 0;
+        guessables.forEach((g, i) => {
+          const ok = i < guesses.length && tokenMatches(g.parsed, guesses[i]);
+          g.chip.classList.toggle('chord-right', ok);
+          g.chip.classList.toggle('chord-wrong', !ok);
+          g.chip.textContent = ok ? g.parsed.label : '?'; // a correct guess earns the reveal
+          if (ok) right++;
+        });
+        feedback.textContent = `${right}/${guessables.length}` +
+          (guesses.length !== guessables.length ? ` (got ${guesses.length} guesses)` : '');
+      };
+      input.onkeydown = (e) => { if (e.key === 'Enter') checkBtn.onclick(); };
+      const revealBtn = document.createElement('button');
+      revealBtn.className = 'chord-quiz-btn';
+      revealBtn.textContent = 'reveal';
+      revealBtn.onclick = () => {
+        revealed = true;
+        for (const g of guessables) {
+          g.chip.textContent = g.parsed.label;
+          g.chip.classList.remove('chord-wrong', 'chord-mystery');
+        }
+        feedback.textContent = 'revealed';
+        input.disabled = true;
+      };
+      controls.append(input, checkBtn, revealBtn, feedback);
+      widget.appendChild(controls);
       return widget;
     }
 
@@ -318,15 +479,21 @@
         const pre = code.closest('pre');
         (pre || code).replaceWith(buildChordWidget(code.textContent));
       }
+      for (const code of root.querySelectorAll('code.language-chords-quiz:not([data-chordified])')) {
+        code.dataset.chordified = '1';
+        const pre = code.closest('pre');
+        (pre || code).replaceWith(buildQuizWidget(code.textContent));
+      }
       for (const code of root.querySelectorAll('code:not([data-chordified])')) {
         const m = code.textContent.match(/^chord:(\S+)$/);
         if (!m) continue;
         code.dataset.chordified = '1';
-        const notes = parseChord(m[1]);
-        if (!notes) continue;
-        code.textContent = m[1];
+        const parsed = parseToken(m[1]);
+        if (!parsed || !parsed.notes) continue;
+        code.textContent = parsed.label;
         code.classList.add('chord-inline');
-        code.onclick = () => playChords([{ notes, el: code }], 80);
+        const item = { ...parsed, el: code };
+        code.onclick = () => playChords([item], 80);
       }
     }
 
