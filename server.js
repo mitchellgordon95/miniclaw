@@ -3,12 +3,13 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { homedir } from 'os';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
 
 import { getSessionMessages, deleteSession } from '@anthropic-ai/claude-agent-sdk';
 import { loadConfig, ensureRuntimeDirs } from './lib/config.js';
-import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, getSessionId, saveSessionId, getContextTokens, resetContextStats } from './lib/claude.js';
+import { sendMessage, abortCurrent, answerQuestion, events, getInitInfo, resetInitInfo, getSessionId, saveSessionId, getContextTokens, resetContextStats } from './lib/claude.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { sendReply, sendSMS, validateTwilioWebhook, transcribeTwilioAudio, transcribeAudioBuffer, downloadTwilioImage, loadResendCreds, synthesizeSpeech } from './lib/channels.js';
 import { startScheduler, stopScheduler, readCronRuns } from './lib/cron.js';
@@ -253,7 +254,7 @@ events.on('error', (message) => {
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({
-  limit: '25mb',
+  limit: '150mb',
   verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); },
 }));
 app.use(express.static(join(__dirname, 'public')));
@@ -277,8 +278,8 @@ app.post('/api/upload', async (req, res) => {
   }
   try {
     const buf = Buffer.from(contentBase64, 'base64');
-    if (buf.length > 25 * 1024 * 1024) {
-      return res.status(413).json({ error: 'file too large (>25mb)' });
+    if (buf.length > 100 * 1024 * 1024) {
+      return res.status(413).json({ error: 'file too large (>100mb)' });
     }
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     const safe = sanitizeFilename(filename);
@@ -456,20 +457,66 @@ app.get('/api/messages', async (req, res) => {
   }
 });
 
-app.post('/api/clear', async (req, res) => {
+// --- Rewind ---
+// The web UI lets Mitchell rewind the conversation to an earlier message he typed. We truncate
+// the persistent SDK session JSONL to just before that message, drop the live query so the next
+// turn cold-resumes from the truncated history, and hand the message's text back so the UI can
+// drop it into the input box for editing or resubmitting.
+
+// The SDK stores each session as ~/.claude/projects/<cwd-with-/-and-.-as-dashes>/<id>.jsonl.
+function sessionFilePath(sessionId) {
+  const encoded = config.workspacePath.replace(/[/.]/g, '-');
+  return join(homedir(), '.claude', 'projects', encoded, `${sessionId}.jsonl`);
+}
+
+app.post('/api/rewind', async (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
-  abortCurrent();
+  const { uuid } = req.body || {};
+  if (!uuid) return res.status(400).json({ error: 'uuid required' });
+
   const sessionId = getSessionId();
-  if (sessionId) {
-    try {
-      await deleteSession(sessionId, { dir: config.workspacePath });
-    } catch (err) {
-      console.error('[api] deleteSession error:', err.message);
+  if (!sessionId) return res.status(400).json({ error: 'no active session' });
+
+  const file = sessionFilePath(sessionId);
+  if (!existsSync(file)) return res.status(404).json({ error: 'session file not found' });
+
+  try {
+    const lines = readFileSync(file, 'utf8').split('\n');
+    let cutIdx = -1;
+    let messageText = '';
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      let d;
+      try { d = JSON.parse(lines[i]); } catch { continue; }
+      if (d.uuid === uuid) {
+        cutIdx = i;
+        const c = d.message?.content;
+        messageText = typeof c === 'string'
+          ? c
+          : Array.isArray(c)
+            ? c.filter(b => b.type === 'text').map(b => b.text).join('\n')
+            : '';
+        break;
+      }
     }
-    saveSessionId('');
+    if (cutIdx === -1) return res.status(404).json({ error: 'message not found in session' });
+
+    // Stop the live query so the next message cold-resumes from the truncated file.
+    abortCurrent();
+
+    // Keep everything before the chosen message; drop it and all that follows.
+    const kept = lines.slice(0, cutIdx).join('\n').replace(/\n+$/, '');
+    writeFileSync(file, kept ? kept + '\n' : '');
+
+    resetContextStats();
+    broadcast({ type: 'context', tokens: 0, threshold: HANDOFF_THRESHOLD });
+    console.log(`[rewind] session ${sessionId} truncated to before ${uuid} (line ${cutIdx})`);
+
+    res.json({ ok: true, text: messageText });
+  } catch (err) {
+    console.error('[rewind] error:', err.message);
+    res.status(500).json({ error: err.message });
   }
-  resetHandoffState();
-  res.json({ ok: true });
 });
 
 app.post('/twilio-sms/webhook', async (req, res) => {
@@ -579,7 +626,7 @@ app.get('/api/status', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   const init = getInitInfo();
   res.json({
-    model: init.model,
+    model: init.model || config.model,
     apiKeySource: init.apiKeySource,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     sessionId: getSessionId(),
@@ -634,6 +681,7 @@ async function handleMessage(channel, content, meta = {}) {
       saveSessionId('');
     }
     resetHandoffState();
+    resetInitInfo();
     const note = 'Session reset. Fresh context. Next message rebootstraps from AGENTS.md + handoff.md.';
     if (isUserFacing) {
       broadcast({ type: 'typing', active: false });

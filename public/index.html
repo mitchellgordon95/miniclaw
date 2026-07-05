@@ -27,6 +27,20 @@
     .md-content code { background: #1e293b; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.85em; color: #e2e8f0; }
     .md-content pre { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.75em; margin: 0.5em 0; overflow-x: auto; }
     .md-content pre code { background: none; padding: 0; font-size: 0.8em; }
+    /* Playable chords */
+    .chord-widget { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 0.6em 0.75em; margin: 0.5em 0; }
+    .chord-chip { background: #1e293b; border: 1px solid #334155; color: #93c5fd; border-radius: 5px; padding: 3px 10px; font-family: ui-monospace, monospace; font-size: 0.85em; cursor: pointer; transition: background 0.1s, transform 0.05s; }
+    .chord-chip:hover { background: #334155; }
+    .chord-chip:active { transform: scale(0.95); }
+    .chord-chip.chord-playing { background: #2563eb; color: #fff; border-color: #3b82f6; }
+    .chord-chip.chord-bad { color: #64748b; cursor: default; text-decoration: line-through; }
+    .chord-bar { color: #475569; font-size: 0.85em; user-select: none; }
+    .chord-play { background: #14532d; border: 1px solid #166534; color: #86efac; border-radius: 5px; padding: 3px 10px; font-size: 0.85em; cursor: pointer; }
+    .chord-play:hover { background: #166534; }
+    .chord-tempo { color: #64748b; font-size: 0.75em; margin-left: auto; }
+    code.chord-inline { cursor: pointer; color: #93c5fd; border: 1px solid #334155; }
+    code.chord-inline:hover { background: #334155; }
+    code.chord-inline.chord-playing { background: #2563eb; color: #fff; }
     .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
     .md-content li { margin: 0.2em 0; }
     .md-content a { color: #60a5fa; text-decoration: underline; }
@@ -93,6 +107,9 @@
     #input-area.drag-over { outline: 2px dashed #60a5fa; outline-offset: -4px; border-radius: 8px; }
     #mic-btn.recording { background: #b91c1c; color: #fff; border-color: #ef4444; animation: mic-pulse 1.2s infinite; }
     @keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }
+    .rewind-btn { margin-left: auto; background: transparent; border: none; color: #64748b; cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 2px; opacity: 0; transition: opacity .12s; }
+    .msg-user:hover .rewind-btn { opacity: 1; }
+    .rewind-btn:hover { color: #e2e8f0; }
   </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -173,6 +190,147 @@
     }
 
     const messagesEl = document.getElementById('messages');
+
+    // --- Playable chords ---
+    // ```chords blocks and inline `chord:Xy` code render as clickable chips synthesized via Web Audio.
+    const NOTE_SEMITONES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    const CHORD_QUALITIES = {
+      '': [0,4,7], 'maj': [0,4,7], 'm': [0,3,7], 'dim': [0,3,6], 'dim7': [0,3,6,9],
+      'aug': [0,4,8], '5': [0,7], '6': [0,4,7,9], 'm6': [0,3,7,9],
+      '7': [0,4,7,10], 'maj7': [0,4,7,11], 'm7': [0,3,7,10], 'mmaj7': [0,3,7,11],
+      'm7b5': [0,3,6,10], '9': [0,4,7,10,14], 'maj9': [0,4,7,11,14], 'm9': [0,3,7,10,14],
+      'add9': [0,4,7,14], 'sus2': [0,2,7], 'sus4': [0,5,7], '7sus4': [0,5,7,10],
+      '11': [0,4,7,10,14,17], '13': [0,4,7,10,14,21],
+    };
+
+    function parseChord(symbol) {
+      const m = symbol.match(/^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/);
+      if (!m) return null;
+      const pc = (name) => (NOTE_SEMITONES[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
+      const quality = m[2]
+        .replace(/[△Δ]/g, 'maj').replace(/M(?=7|9)/g, 'maj').replace(/min/g, 'm')
+        .replace(/°/g, 'dim').replace(/ø/g, 'm7b5').replace(/\+/g, 'aug');
+      const intervals = CHORD_QUALITIES[quality];
+      if (!intervals) return null;
+      const rootMidi = 48 + pc(m[1]); // root voiced C3-B3
+      const notes = intervals.map((iv) => rootMidi + iv);
+      notes.unshift((m[3] ? 48 + pc(m[3]) : rootMidi) - 12); // bass an octave below
+      return notes;
+    }
+
+    let audioCtx = null;
+    let activeVoices = [];
+    let chordTimeouts = [];
+
+    function stopChords() {
+      for (const t of chordTimeouts) clearTimeout(t);
+      chordTimeouts = [];
+      for (const v of activeVoices) { try { v.stop(); } catch {} }
+      activeVoices = [];
+      document.querySelectorAll('.chord-playing').forEach((el) => el.classList.remove('chord-playing'));
+    }
+
+    function scheduleChord(midiNotes, when, dur) {
+      const gainPerVoice = 0.5 / midiNotes.length;
+      for (const midi of midiNotes) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        osc.type = 'triangle';
+        osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+        filter.type = 'lowpass';
+        filter.frequency.value = 2200;
+        gain.gain.setValueAtTime(0, when);
+        gain.gain.linearRampToValueAtTime(gainPerVoice, when + 0.02);
+        gain.gain.linearRampToValueAtTime(gainPerVoice * 0.6, when + 0.25);
+        gain.gain.setValueAtTime(gainPerVoice * 0.6, when + Math.max(0.25, dur - 0.3));
+        gain.gain.linearRampToValueAtTime(0.0001, when + dur);
+        osc.connect(filter).connect(gain).connect(audioCtx.destination);
+        osc.start(when);
+        osc.stop(when + dur + 0.05);
+        activeVoices.push(osc);
+      }
+    }
+
+    function playChords(items, tempo) {
+      // items: [{notes, el}]; each chord held 2 beats
+      stopChords();
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const dur = (60 / tempo) * 2;
+      const t0 = audioCtx.currentTime + 0.05;
+      items.forEach(({ notes, el }, i) => {
+        scheduleChord(notes, t0 + i * dur, dur);
+        if (el) {
+          chordTimeouts.push(setTimeout(() => el.classList.add('chord-playing'), i * dur * 1000 + 50));
+          chordTimeouts.push(setTimeout(() => el.classList.remove('chord-playing'), (i + 1) * dur * 1000 + 50));
+        }
+      });
+    }
+
+    function buildChordWidget(text) {
+      const widget = document.createElement('div');
+      widget.className = 'chord-widget';
+      widget.dataset.chordified = '1';
+      let tempo = 80;
+      const sequence = []; // {notes, el} in play order
+      const playBtn = document.createElement('button');
+      playBtn.className = 'chord-play';
+      playBtn.textContent = '▶ play';
+      playBtn.onclick = () => playChords(sequence, tempo);
+      widget.appendChild(playBtn);
+      for (const line of text.trim().split('\n')) {
+        const tempoMatch = line.match(/^\s*tempo:\s*(\d+)\s*$/i);
+        if (tempoMatch) { tempo = Math.min(300, Math.max(30, +tempoMatch[1])); continue; }
+        for (const token of line.trim().split(/\s+/)) {
+          if (!token) continue;
+          if (token === '|') {
+            const bar = document.createElement('span');
+            bar.className = 'chord-bar';
+            bar.textContent = '|';
+            widget.appendChild(bar);
+            continue;
+          }
+          const chip = document.createElement('button');
+          chip.className = 'chord-chip';
+          chip.textContent = token;
+          const notes = parseChord(token);
+          if (notes) {
+            chip.onclick = () => playChords([{ notes, el: chip }], tempo);
+            sequence.push({ notes, el: chip });
+          } else {
+            chip.classList.add('chord-bad');
+            chip.title = 'unrecognized chord';
+          }
+          widget.appendChild(chip);
+        }
+      }
+      const tempoEl = document.createElement('span');
+      tempoEl.className = 'chord-tempo';
+      tempoEl.textContent = `${tempo} bpm`;
+      widget.appendChild(tempoEl);
+      return widget;
+    }
+
+    function enhanceChords(root) {
+      for (const code of root.querySelectorAll('code.language-chords:not([data-chordified])')) {
+        code.dataset.chordified = '1';
+        const pre = code.closest('pre');
+        (pre || code).replaceWith(buildChordWidget(code.textContent));
+      }
+      for (const code of root.querySelectorAll('code:not([data-chordified])')) {
+        const m = code.textContent.match(/^chord:(\S+)$/);
+        if (!m) continue;
+        code.dataset.chordified = '1';
+        const notes = parseChord(m[1]);
+        if (!notes) continue;
+        code.textContent = m[1];
+        code.classList.add('chord-inline');
+        code.onclick = () => playChords([{ notes, el: code }], 80);
+      }
+    }
+
+    new MutationObserver(() => enhanceChords(messagesEl)).observe(messagesEl, { childList: true, subtree: true });
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
     const stopBtn = document.getElementById('stop');
@@ -276,11 +434,11 @@
       const ch = msg._channel || 'web';
       if (msg.type === 'user') {
         if (typeof content === 'string') {
-          target.appendChild(createMessageEl({ role: 'user', channel: ch, content }));
+          target.appendChild(createMessageEl({ role: 'user', channel: ch, content, uuid: msg.uuid }));
         } else if (Array.isArray(content)) {
           for (const block of content) {
             if (block.type === 'text') {
-              target.appendChild(createMessageEl({ role: 'user', channel: ch, content: block.text }));
+              target.appendChild(createMessageEl({ role: 'user', channel: ch, content: block.text, uuid: msg.uuid }));
             }
           }
         }
@@ -690,7 +848,58 @@
         </div>
         ${contentHtml}
       `;
+
+      // Rewind affordance on the user's own messages: restart the conversation from here.
+      if (isUser) {
+        const btn = document.createElement('button');
+        btn.className = 'rewind-btn';
+        btn.title = 'Rewind conversation to this message';
+        btn.innerHTML = '&#8634;'; // ↺
+        btn.addEventListener('click', () => rewindTo(msg.uuid, msg.content || ''));
+        div.firstElementChild.appendChild(btn);
+      }
       return div;
+    }
+
+    // Rewind: truncate the session to just before this message, then load its text back into
+    // the input box to edit or resubmit. Live messages may not carry a uuid yet, so fall back
+    // to matching by text against the persisted session.
+    async function rewindTo(uuid, text) {
+      if (!confirm('Rewind the conversation to this message? Everything after it will be removed.')) return;
+      let targetUuid = uuid;
+      if (!targetUuid) {
+        try {
+          const r = await fetch(`/api/messages?limit=200&token=${TOKEN}`);
+          const d = await r.json();
+          for (const m of (d.messages || [])) {
+            if (m.type !== 'user') continue;
+            const c = m.message?.content;
+            const t = typeof c === 'string'
+              ? c
+              : Array.isArray(c) ? c.filter(b => b.type === 'text').map(b => b.text).join('\n') : '';
+            if (t.trim() === (text || '').trim() && m.uuid) targetUuid = m.uuid; // keep last match
+          }
+        } catch { /* ignore */ }
+      }
+      if (!targetUuid) { alert('Could not locate this message in the session yet. Try reloading.'); return; }
+      try {
+        const res = await fetch(`/api/rewind?token=${TOKEN}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuid: targetUuid }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) { alert('Rewind failed: ' + (data.error || res.status)); return; }
+        finalizeStream();
+        setGenerating(false);
+        await loadHistory();
+        inputEl.value = (data.text != null ? data.text : text) || '';
+        autoResize();
+        inputEl.focus();
+        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+      } catch (e) {
+        alert('Rewind error: ' + e.message);
+      }
     }
 
     function addMessage(msg) {
@@ -783,17 +992,6 @@
       inputEl.style.height = inputEl.scrollHeight + 'px';
     }
 
-    async function clearSession() {
-      try {
-        await fetch(`/api/clear?token=${TOKEN}`, { method: 'POST' });
-        messagesEl.innerHTML = '';
-        historyOffset = 0;
-        historyTotal = 0;
-      } catch (e) {
-        console.error('Failed to clear session:', e);
-      }
-    }
-
     // --- Outgoing message reliability ---
     // The socket can read OPEN but be dead (e.g. laptop slept). In that case
     // ws.send() silently drops the message. We optimistically clear the input
@@ -825,12 +1023,6 @@
       const text = inputEl.value.trim();
       const uploaded = uploads.filter(u => u.status === 'done');
       if (!text && uploaded.length === 0) return;
-      if (text === '/clear') {
-        inputEl.value = '';
-        autoResize();
-        clearSession();
-        return;
-      }
       let content = text;
       if (uploaded.length > 0) {
         const lines = uploaded.map(u => `Attached: ${u.path} (${u.originalName}, ${formatSize(u.size)})`);
