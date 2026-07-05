@@ -219,12 +219,33 @@
       '11': [0,4,7,10,14,17], '13': [0,4,7,10,14,21],
     };
     const CHORD_TOKEN_RE = /\[[^\]]*\](?::[\d.]+)?|\S+/g;
+    const CHORD_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+    // qualities tried when naming an arbitrary voicing; bass-as-root is tried first, so C6 beats Am7/C
+    const INFER_ORDER = ['', 'm', '7', 'maj7', 'm7', 'sus4', 'sus2', 'dim', 'aug', 'm7b5', 'dim7', '6', 'm6', 'mmaj7', 'add9', '9', 'maj9', 'm9', '7sus4', '11', '13', '5'];
 
     const pitchClass = (name) => (NOTE_SEMITONES[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
 
     function noteToMidi(name) {
       const m = name.match(/^([A-G][#b]?)(\d)$/);
       return m ? 12 * (+m[2] + 1) + pitchClass(m[1]) : null; // C4 = 60
+    }
+
+    function midiToName(n) { return CHORD_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1); }
+
+    // Best-effort chord name for an explicit voicing ("C", "Am7", "C/E"); null if nothing matches.
+    function inferChordName(notes) {
+      const pcs = [...new Set(notes.map((n) => ((n % 12) + 12) % 12))];
+      if (pcs.length < 2) return null;
+      const bass = bassPc(notes);
+      for (const root of [bass, ...pcs.filter((p) => p !== bass)]) {
+        const rel = new Set(pcs.map((p) => (p - root + 12) % 12));
+        for (const q of INFER_ORDER) {
+          const iv = new Set(CHORD_QUALITIES[q].map((i) => i % 12));
+          if (iv.size === rel.size && [...iv].every((i) => rel.has(i)))
+            return CHORD_NAMES[root] + q + (root !== bass ? '/' + CHORD_NAMES[bass] : '');
+        }
+      }
+      return null;
     }
 
     function parseChord(symbol) {
@@ -253,12 +274,13 @@
         const names = bm[1].trim().split(/[\s,]+/).filter(Boolean);
         const notes = names.map(noteToMidi);
         if (!notes.length || notes.some((n) => n === null)) return null;
-        return { notes, beats, label: names.join('·'), single: notes.length === 1 };
+        const notesLabel = names.join('·');
+        return { notes, beats, label: inferChordName(notes) || notesLabel, notesLabel, single: notes.length === 1 };
       }
       const midi = noteToMidi(body);
       if (midi !== null) return { notes: [midi], beats, label: body, single: true };
       const notes = parseChord(body);
-      return notes ? { notes, beats, label: body } : null;
+      return notes ? { notes, beats, label: body, notesLabel: notes.map(midiToName).join('·') } : null;
     }
 
     // block text -> {tempo, hint, tokens: [{raw, parsed}]}
@@ -382,6 +404,10 @@
         if (parsed) {
           const item = { ...parsed, el: chip };
           chip.onclick = () => playChords([item], tempo);
+          if (parsed.notesLabel) {
+            chip.title = `${parsed.notesLabel} — double-click to toggle`;
+            chip.ondblclick = () => { chip.textContent = chip.textContent === parsed.label ? parsed.notesLabel : parsed.label; };
+          }
           sequence.push(item);
         } else {
           chip.classList.add('chord-bad');
@@ -463,6 +489,7 @@
         revealed = true;
         for (const g of guessables) {
           g.chip.textContent = g.parsed.label;
+          if (g.parsed.notesLabel) g.chip.title = g.parsed.notesLabel;
           g.chip.classList.remove('chord-wrong', 'chord-mystery');
         }
         feedback.textContent = 'revealed';
