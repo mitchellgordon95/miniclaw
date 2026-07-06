@@ -77,6 +77,8 @@
     .drill-ans.drill-right { background: #14532d; color: #86efac; border-color: #22c55e; }
     .drill-ans.drill-wrong { background: #450a0a; color: #fca5a5; border-color: #b91c1c; }
     .drill-score { color: #94a3b8; font-size: 0.8em; margin-left: auto; }
+    .drill-reveal { flex-basis: 100%; text-align: left; background: none; border: none; color: #94a3b8; font-family: ui-monospace, monospace; font-size: 0.8em; cursor: pointer; padding: 0; }
+    .drill-reveal:hover { color: #e2e8f0; }
     .drill-summary { flex-basis: 100%; color: #e2e8f0; font-size: 0.8em; font-family: ui-monospace, monospace; white-space: pre-wrap; }
     .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
     .md-content li { margin: 0.2em 0; }
@@ -669,9 +671,12 @@
       scoreEl.className = 'drill-score';
       const answers = document.createElement('div');
       answers.className = 'drill-answers';
+      const reveal = document.createElement('button');
+      reveal.className = 'drill-reveal';
+      reveal.style.display = 'none';
       const summary = document.createElement('div');
       summary.className = 'drill-summary';
-      widget.append(playBtn, replayBtn, scoreEl, answers, summary);
+      widget.append(playBtn, replayBtn, scoreEl, answers, reveal, summary);
 
       let current = null; // {quality, notes}
       let lastKey = null, asked = 0, right = 0, nextTimer = null;
@@ -712,7 +717,8 @@
           const shift = 12 * (Math.floor(Math.random() * 3) - 1);
           notes = notes.map((n) => n + shift);
         }
-        current = { quality, notes };
+        current = { quality, notes, label: key };
+        reveal.style.display = 'none';
         for (const b of btns.values()) { b.disabled = false; b.classList.remove('drill-right', 'drill-wrong'); }
         replayBtn.disabled = false;
         scoreEl.textContent = `${right}/${asked} · q${asked + 1} of ${count}`;
@@ -722,6 +728,7 @@
       function answer(q) {
         if (!current) return;
         const correct = current.quality;
+        const played = current;
         asked++;
         tally[correct] = tally[correct] || [0, 0];
         tally[correct][1]++;
@@ -737,8 +744,16 @@
         for (const b of btns.values()) b.disabled = true;
         current = null;
         scoreEl.textContent = `${right}/${asked}`;
-        if (asked >= count) return finish();
-        nextTimer = setTimeout(nextQuestion, q === correct ? 900 : 1800);
+        const isLast = asked >= count;
+        // Show what was actually played; click replays it (and buys reading time before auto-advance)
+        reveal.textContent = `played: ${played.label} — ${played.notes.map(midiToName).join(' ')} (click to replay)`;
+        reveal.style.display = '';
+        reveal.onclick = () => {
+          playChords([{ notes: played.notes, beats: 3 }], 80);
+          if (!isLast) { clearTimeout(nextTimer); nextTimer = setTimeout(nextQuestion, 2600); }
+        };
+        if (isLast) return finish();
+        nextTimer = setTimeout(nextQuestion, q === correct ? 1300 : 2600);
       }
 
       function finish() {
