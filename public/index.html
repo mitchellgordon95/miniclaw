@@ -676,6 +676,15 @@
       let current = null; // {quality, notes}
       let lastKey = null, asked = 0, right = 0, nextTimer = null;
       const tally = {}; // quality -> [right, asked]
+      // Adaptive weighting: misses make a quality more likely; persists across "again" rounds.
+      const weights = new Map(qualities.map((q) => [q, 1]));
+      function pickQuality() {
+        let total = 0;
+        for (const w of weights.values()) total += w;
+        let r = Math.random() * total;
+        for (const [q, w] of weights) { r -= w; if (r <= 0) return q; }
+        return qualities[qualities.length - 1];
+      }
       const btns = new Map();
       for (const q of qualities) {
         const b = document.createElement('button');
@@ -694,7 +703,7 @@
         let root, quality, key;
         do {
           root = roots[Math.floor(Math.random() * roots.length)];
-          quality = qualities[Math.floor(Math.random() * qualities.length)];
+          quality = pickQuality();
           key = root + quality;
         } while (key === lastKey && (roots.length > 1 || qualities.length > 1));
         lastKey = key;
@@ -718,7 +727,13 @@
         tally[correct][1]++;
         if (q === correct) { right++; tally[correct][0]++; }
         btns.get(correct).classList.add('drill-right');
-        if (q !== correct) btns.get(q).classList.add('drill-wrong');
+        if (q !== correct) {
+          btns.get(q).classList.add('drill-wrong');
+          weights.set(correct, Math.min(4, weights.get(correct) + 1.5));
+          weights.set(q, Math.min(4, weights.get(q) + 0.5)); // the confused-with quality too
+        } else {
+          weights.set(correct, Math.max(1, weights.get(correct) - 0.5));
+        }
         for (const b of btns.values()) b.disabled = true;
         current = null;
         scoreEl.textContent = `${right}/${asked}`;
@@ -730,6 +745,26 @@
         replayBtn.disabled = true;
         const parts = qualities.filter((q) => tally[q]).map((q) => `${qualLabel(q)} ${tally[q][0]}/${tally[q][1]}`);
         summary.textContent = `round done: ${right}/${asked}  (${parts.join(', ')})`;
+        // One-click reporting: posts the round result as a chat message so the agent
+        // can fold it into the mastery table without Mitchell retyping scores.
+        const resultMsg = `drill result — ${title || 'drill'}: ${right}/${asked} (${parts.join(', ')})`;
+        const sendResBtn = document.createElement('button');
+        sendResBtn.className = 'chord-quiz-btn';
+        sendResBtn.textContent = 'send results';
+        sendResBtn.onclick = () => {
+          if (inputEl.value.trim()) { // don't clobber a draft; append and let him send
+            inputEl.value = inputEl.value.trimEnd() + '\n' + resultMsg;
+            inputEl.focus();
+            sendResBtn.textContent = 'added to input';
+          } else {
+            inputEl.value = resultMsg;
+            send();
+            sendResBtn.textContent = 'sent ✓';
+          }
+          sendResBtn.disabled = true;
+        };
+        summary.appendChild(document.createElement('br'));
+        summary.appendChild(sendResBtn);
         playBtn.textContent = '▶ again';
         asked = 0; right = 0; for (const q in tally) delete tally[q];
       }
