@@ -54,6 +54,20 @@
     .chord-quiz-feedback { font-size: 0.8em; color: #94a3b8; white-space: nowrap; }
     /* Never show a quiz answer as raw text, even mid-stream before enhancement */
     pre:has(code.language-chords-quiz) { filter: blur(8px); user-select: none; }
+    /* Inline piano keyboard (```keyboard blocks) */
+    .kb-scroll { flex-basis: 100%; overflow-x: auto; padding-bottom: 4px; }
+    .kb-piano { position: relative; height: 110px; }
+    .kb-key { position: absolute; top: 0; box-sizing: border-box; cursor: pointer; padding: 0; }
+    .kb-white { width: 34px; height: 110px; background: #e2e8f0; border: 1px solid #475569; border-radius: 0 0 4px 4px; z-index: 1; }
+    .kb-white:hover { background: #f8fafc; }
+    .kb-black { width: 20px; height: 66px; background: #1e293b; border: 1px solid #0f172a; border-radius: 0 0 3px 3px; z-index: 2; }
+    .kb-black:hover { background: #334155; }
+    .kb-key.kb-held { background: #3b82f6; border-color: #93c5fd; }
+    .kb-key.kb-active { background: #2563eb; border-color: #60a5fa; }
+    .kb-label { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 0.55rem; color: #475569; pointer-events: none; font-family: ui-monospace, monospace; }
+    .kb-key.kb-held .kb-label, .kb-key.kb-active .kb-label { color: #dbeafe; }
+    .kb-name { color: #93c5fd; font-family: ui-monospace, monospace; font-size: 0.85em; min-height: 1.2em; }
+    .chord-quiz-btn.kb-on { background: #1d4ed8; color: #fff; }
     .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
     .md-content li { margin: 0.2em 0; }
     .md-content a { color: #60a5fa; text-decoration: underline; }
@@ -500,7 +514,112 @@
       return widget;
     }
 
+    // ```keyboard blocks render a clickable piano (default C3-C5; `range: C2 C4` to change).
+    // Tap a key to hear it. "hold" latches keys into a chord (a mouse can't hold three keys),
+    // replaying the set on every change and naming it via inferChordName.
+    function buildKeyboardWidget(text) {
+      let lo = 48, hi = 72; // C3..C5
+      for (const line of text.trim().split('\n')) {
+        const m = line.match(/^\s*range:\s*([A-G][#b]?\d)\s*[-\s]\s*([A-G][#b]?\d)\s*$/i);
+        if (m) {
+          const a = noteToMidi(m[1].toUpperCase()), b = noteToMidi(m[2].toUpperCase());
+          if (a !== null && b !== null && b > a) { lo = a; hi = Math.min(a + 48, b); }
+        }
+      }
+      const isBlack = (n) => [1, 3, 6, 8, 10].includes(((n % 12) + 12) % 12);
+      while (isBlack(lo)) lo--;
+      while (isBlack(hi)) hi++;
+
+      const widget = document.createElement('div');
+      widget.className = 'chord-widget kb-widget';
+      widget.dataset.chordified = '1';
+
+      const held = new Set();
+      const keyEls = new Map(); // midi -> element
+      let holdMode = false;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'kb-name';
+      const updateName = () => {
+        const notes = [...held].sort((x, y) => x - y);
+        nameEl.textContent = notes.length
+          ? `${inferChordName(notes) || '—'}  [${notes.map(midiToName).join(' ')}]` : '';
+      };
+      const playHeld = () => { if (held.size) playChords([{ notes: [...held].sort((x, y) => x - y), beats: 3 }], 80); };
+      const clearHeld = () => {
+        held.clear();
+        for (const el of keyEls.values()) el.classList.remove('kb-held');
+        updateName();
+      };
+
+      const playBtn = document.createElement('button');
+      playBtn.className = 'chord-play';
+      playBtn.textContent = '▶ play held';
+      playBtn.onclick = playHeld;
+      const holdBtn = document.createElement('button');
+      holdBtn.className = 'chord-quiz-btn';
+      holdBtn.textContent = 'hold: off';
+      holdBtn.onclick = () => {
+        holdMode = !holdMode;
+        holdBtn.textContent = holdMode ? 'hold: on' : 'hold: off';
+        holdBtn.classList.toggle('kb-on', holdMode);
+        if (!holdMode) clearHeld();
+      };
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'chord-quiz-btn';
+      clearBtn.textContent = 'clear';
+      clearBtn.onclick = clearHeld;
+      widget.append(playBtn, holdBtn, clearBtn, nameEl);
+
+      const scroll = document.createElement('div');
+      scroll.className = 'kb-scroll';
+      const piano = document.createElement('div');
+      piano.className = 'kb-piano';
+      const WHITE_W = 34, BLACK_W = 20;
+      let whiteCount = 0;
+      for (let n = lo; n <= hi; n++) {
+        const key = document.createElement('button');
+        key.dataset.midi = n;
+        if (isBlack(n)) {
+          key.className = 'kb-key kb-black';
+          key.style.left = `${whiteCount * WHITE_W - BLACK_W / 2}px`;
+          key.title = midiToName(n);
+        } else {
+          key.className = 'kb-key kb-white';
+          key.style.left = `${whiteCount * WHITE_W}px`;
+          const label = document.createElement('span');
+          label.className = 'kb-label';
+          label.textContent = midiToName(n);
+          key.appendChild(label);
+          whiteCount++;
+        }
+        key.onpointerdown = () => {
+          if (holdMode) {
+            if (held.has(n)) { held.delete(n); key.classList.remove('kb-held'); }
+            else { held.add(n); key.classList.add('kb-held'); }
+            updateName();
+            playHeld();
+          } else {
+            playChords([{ notes: [n], beats: 2 }], 100);
+            key.classList.add('kb-active');
+            setTimeout(() => key.classList.remove('kb-active'), 350);
+          }
+        };
+        keyEls.set(n, key);
+        piano.appendChild(key);
+      }
+      piano.style.width = `${whiteCount * WHITE_W}px`;
+      scroll.appendChild(piano);
+      widget.appendChild(scroll);
+      return widget;
+    }
+
     function enhanceChords(root) {
+      for (const code of root.querySelectorAll('code.language-keyboard:not([data-chordified])')) {
+        code.dataset.chordified = '1';
+        const pre = code.closest('pre');
+        (pre || code).replaceWith(buildKeyboardWidget(code.textContent));
+      }
       for (const code of root.querySelectorAll('code.language-chords:not([data-chordified])')) {
         code.dataset.chordified = '1';
         const pre = code.closest('pre');
