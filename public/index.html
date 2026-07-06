@@ -805,7 +805,10 @@
         summary.appendChild(document.createElement('br'));
         summary.appendChild(sendResBtn);
         playBtn.textContent = '▶ again';
-        playBtn.disabled = false;
+        // Stay disabled briefly: the user has been rhythm-clicking "next", and an instant
+        // "again" in the same spot eats the summary and restarts the round.
+        playBtn.disabled = true;
+        setTimeout(() => { playBtn.disabled = false; }, 1500);
         asked = 0; right = 0; for (const q in tally) delete tally[q];
       }
 
