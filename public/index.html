@@ -631,17 +631,26 @@
     //        count: 20 (questions per round) | register: random (shift voicing -1/0/+1 octave)
     // Each question picks a random root+quality (never the same chord twice in a row), plays it,
     // and offers one answer button per quality. Tracks per-quality tallies for the summary.
+    // Interval names -> semitones for interval-mode drills (case matters: m3 vs M3)
+    const DRILL_INTERVALS = { m2: 1, M2: 2, m3: 3, M3: 4, P4: 5, TT: 6, P5: 7, m6: 8, M6: 9, m7: 10, M7: 11, P8: 12 };
+
     function buildDrillWidget(text) {
-      let title = null, qualities = ['', 'm'], roots = CHORD_NAMES.slice(), count = 20, randomRegister = false;
+      let title = null, qualities = ['', 'm'], intervals = [], roots = CHORD_NAMES.slice(),
+        count = 20, randomRegister = false, direction = 'up', style = 'block';
       const QUAL_ALIASES = { maj: '', major: '', min: 'm', minor: 'm' };
       for (const line of text.trim().split('\n')) {
-        const m = line.match(/^\s*(title|qualities|roots|count|register):\s*(.+?)\s*$/i);
+        const m = line.match(/^\s*(title|qualities|intervals|roots|count|register|direction|style):\s*(.+?)\s*$/i);
         if (!m) continue;
         const key = m[1].toLowerCase(), val = m[2];
         if (key === 'title') title = val;
         else if (key === 'count') count = Math.min(100, Math.max(5, +val || 20));
         else if (key === 'register') randomRegister = /random/i.test(val);
-        else if (key === 'qualities') {
+        else if (key === 'direction' && /^(up|down|both|harmonic)$/i.test(val)) direction = val.toLowerCase();
+        else if (key === 'style' && /^(block|arp|both)$/i.test(val)) style = val.toLowerCase();
+        else if (key === 'intervals') {
+          const iv = val.split(/[\s,]+/).map((t) => (/^(tt|tritone)$/i.test(t) ? 'TT' : t)).filter((t) => DRILL_INTERVALS[t]);
+          if (iv.length >= 2) intervals = [...new Set(iv)];
+        } else if (key === 'qualities') {
           const qs = val.split(/[\s,]+/).map((q) => QUAL_ALIASES[q.toLowerCase()] ?? q).filter((q) => CHORD_QUALITIES[q]);
           if (qs.length >= 2) qualities = [...new Set(qs)];
         } else if (key === 'roots') {
@@ -649,7 +658,9 @@
           if (rs.length) roots = rs;
         }
       }
-      const qualLabel = (q) => (q === '' ? 'maj' : q === 'm' ? 'min' : q);
+      const isInterval = intervals.length >= 2;
+      const pool = isInterval ? intervals : qualities;
+      const poolLabel = isInterval ? (x) => x : (q) => (q === '' ? 'maj' : q === 'm' ? 'min' : q);
 
       const widget = document.createElement('div');
       widget.className = 'chord-widget';
@@ -681,44 +692,60 @@
       let current = null; // {quality, notes}
       let lastKey = null, asked = 0, right = 0;
       const tally = {}; // quality -> [right, asked]
-      // Adaptive weighting: misses make a quality more likely; persists across "again" rounds.
-      const weights = new Map(qualities.map((q) => [q, 1]));
-      function pickQuality() {
+      // Adaptive weighting: misses make an answer more likely; persists across "again" rounds.
+      const weights = new Map(pool.map((q) => [q, 1]));
+      function pickFromPool() {
         let total = 0;
         for (const w of weights.values()) total += w;
         let r = Math.random() * total;
         for (const [q, w] of weights) { r -= w; if (r <= 0) return q; }
-        return qualities[qualities.length - 1];
+        return pool[pool.length - 1];
       }
       const btns = new Map();
-      for (const q of qualities) {
+      for (const q of pool) {
         const b = document.createElement('button');
         b.className = 'drill-ans';
-        b.textContent = qualLabel(q);
+        b.textContent = poolLabel(q);
         b.disabled = true;
         b.onclick = () => answer(q);
         btns.set(q, b);
         answers.appendChild(b);
       }
 
-      const playCurrent = () => { if (current) playChords([{ notes: current.notes, beats: 3 }], 80); };
+      const playCurrent = () => { if (current) playChords(current.items, 85); };
+
+      // -> {answer, items (for playChords), key (repeat guard), reveal (text shown after answering)}
+      function makeQuestion() {
+        const root = roots[Math.floor(Math.random() * roots.length)];
+        const choice = pickFromPool();
+        const shift = randomRegister ? 12 * (Math.floor(Math.random() * 3) - 1) : 0;
+        if (isInterval) {
+          const lo = 48 + pitchClass(root) + shift;
+          const hi = lo + DRILL_INTERVALS[choice];
+          const dir = direction === 'both' ? (Math.random() < 0.5 ? 'up' : 'down') : direction;
+          if (dir === 'harmonic') {
+            return { answer: choice, items: [{ notes: [lo, hi], beats: 3 }], key: choice + root + dir,
+              reveal: `${choice}: ${midiToName(lo)} + ${midiToName(hi)}` };
+          }
+          const [a, b] = dir === 'down' ? [hi, lo] : [lo, hi];
+          return { answer: choice, items: [{ notes: [a], beats: 1.2 }, { notes: [b], beats: 2 }],
+            key: choice + root + dir, reveal: `${choice}: ${midiToName(a)} → ${midiToName(b)}` };
+        }
+        const notes = parseChord(root + choice).map((n) => n + shift);
+        const blocked = { notes, beats: 3 };
+        const arp = notes.map((n) => ({ notes: [n], beats: 0.7 }));
+        const items = style === 'arp' ? arp : style === 'both' ? [...arp, { rest: true, beats: 0.5 }, blocked] : [blocked];
+        return { answer: choice, items, key: root + choice,
+          reveal: `${root + choice} — ${notes.map(midiToName).join(' ')}` };
+      }
 
       function nextQuestion() {
         playBtn.textContent = '▶ next';
         playBtn.disabled = true; // answer first; replay is there for re-listens
-        let root, quality, key;
-        do {
-          root = roots[Math.floor(Math.random() * roots.length)];
-          quality = pickQuality();
-          key = root + quality;
-        } while (key === lastKey && (roots.length > 1 || qualities.length > 1));
-        lastKey = key;
-        let notes = parseChord(key);
-        if (randomRegister) {
-          const shift = 12 * (Math.floor(Math.random() * 3) - 1);
-          notes = notes.map((n) => n + shift);
-        }
-        current = { quality, notes, label: key };
+        let pick, tries = 0;
+        do { pick = makeQuestion(); } while (pick.key === lastKey && ++tries < 20);
+        lastKey = pick.key;
+        current = pick;
         reveal.style.display = 'none';
         for (const b of btns.values()) { b.disabled = false; b.classList.remove('drill-right', 'drill-wrong'); }
         replayBtn.disabled = false;
@@ -728,7 +755,7 @@
 
       function answer(q) {
         if (!current) return;
-        const correct = current.quality;
+        const correct = current.answer;
         const played = current;
         asked++;
         tally[correct] = tally[correct] || [0, 0];
@@ -746,16 +773,16 @@
         current = null;
         scoreEl.textContent = `${right}/${asked}`;
         // Show what was actually played; click replays it. Advance is manual via "next".
-        reveal.textContent = `played: ${played.label} — ${played.notes.map(midiToName).join(' ')} (click to replay)`;
+        reveal.textContent = `played: ${played.reveal} (click to replay)`;
         reveal.style.display = '';
-        reveal.onclick = () => playChords([{ notes: played.notes, beats: 3 }], 80);
+        reveal.onclick = () => playChords(played.items, 85);
         if (asked >= count) return finish();
         playBtn.disabled = false;
       }
 
       function finish() {
         replayBtn.disabled = true;
-        const parts = qualities.filter((q) => tally[q]).map((q) => `${qualLabel(q)} ${tally[q][0]}/${tally[q][1]}`);
+        const parts = pool.filter((q) => tally[q]).map((q) => `${poolLabel(q)} ${tally[q][0]}/${tally[q][1]}`);
         summary.textContent = `round done: ${right}/${asked}  (${parts.join(', ')})`;
         // One-click reporting: posts the round result as a chat message so the agent
         // can fold it into the mastery table without Mitchell retyping scores.
