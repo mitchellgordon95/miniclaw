@@ -68,6 +68,16 @@
     .kb-key.kb-held .kb-label, .kb-key.kb-active .kb-label { color: #dbeafe; }
     .kb-name { color: #93c5fd; font-family: ui-monospace, monospace; font-size: 0.85em; min-height: 1.2em; }
     .chord-quiz-btn.kb-on { background: #1d4ed8; color: #fff; }
+    /* Random drill widget (```drill blocks) */
+    .drill-title { flex-basis: 100%; color: #f1f5f9; font-size: 0.85em; font-weight: 600; }
+    .drill-answers { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+    .drill-ans { background: #1e293b; border: 1px solid #334155; color: #93c5fd; border-radius: 5px; padding: 4px 12px; font-family: ui-monospace, monospace; font-size: 0.9em; cursor: pointer; }
+    .drill-ans:hover:not(:disabled) { background: #334155; }
+    .drill-ans:disabled { cursor: default; opacity: 0.9; }
+    .drill-ans.drill-right { background: #14532d; color: #86efac; border-color: #22c55e; }
+    .drill-ans.drill-wrong { background: #450a0a; color: #fca5a5; border-color: #b91c1c; }
+    .drill-score { color: #94a3b8; font-size: 0.8em; margin-left: auto; }
+    .drill-summary { flex-basis: 100%; color: #e2e8f0; font-size: 0.8em; font-family: ui-monospace, monospace; white-space: pre-wrap; }
     .md-content ul, .md-content ol { margin: 0.4em 0; padding-left: 1.5em; }
     .md-content li { margin: 0.2em 0; }
     .md-content a { color: #60a5fa; text-decoration: underline; }
@@ -614,7 +624,127 @@
       return widget;
     }
 
+    // ```drill blocks: endless auto-generated ear-training questions, randomized client-side.
+    // Lines: title: text | qualities: maj m sus4 dim aug | roots: C D Eb F# (default: all 12)
+    //        count: 20 (questions per round) | register: random (shift voicing -1/0/+1 octave)
+    // Each question picks a random root+quality (never the same chord twice in a row), plays it,
+    // and offers one answer button per quality. Tracks per-quality tallies for the summary.
+    function buildDrillWidget(text) {
+      let title = null, qualities = ['', 'm'], roots = CHORD_NAMES.slice(), count = 20, randomRegister = false;
+      const QUAL_ALIASES = { maj: '', major: '', min: 'm', minor: 'm' };
+      for (const line of text.trim().split('\n')) {
+        const m = line.match(/^\s*(title|qualities|roots|count|register):\s*(.+?)\s*$/i);
+        if (!m) continue;
+        const key = m[1].toLowerCase(), val = m[2];
+        if (key === 'title') title = val;
+        else if (key === 'count') count = Math.min(100, Math.max(5, +val || 20));
+        else if (key === 'register') randomRegister = /random/i.test(val);
+        else if (key === 'qualities') {
+          const qs = val.split(/[\s,]+/).map((q) => QUAL_ALIASES[q.toLowerCase()] ?? q).filter((q) => CHORD_QUALITIES[q]);
+          if (qs.length >= 2) qualities = [...new Set(qs)];
+        } else if (key === 'roots') {
+          const rs = val.split(/[\s,]+/).filter((r) => /^[A-G][#b]?$/.test(r));
+          if (rs.length) roots = rs;
+        }
+      }
+      const qualLabel = (q) => (q === '' ? 'maj' : q === 'm' ? 'min' : q);
+
+      const widget = document.createElement('div');
+      widget.className = 'chord-widget';
+      widget.dataset.chordified = '1';
+      if (title) {
+        const t = document.createElement('div');
+        t.className = 'drill-title';
+        t.textContent = `drill: ${title}`;
+        widget.appendChild(t);
+      }
+      const playBtn = document.createElement('button');
+      playBtn.className = 'chord-play';
+      playBtn.textContent = '▶ start';
+      const replayBtn = document.createElement('button');
+      replayBtn.className = 'chord-quiz-btn';
+      replayBtn.textContent = 'replay';
+      replayBtn.disabled = true;
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'drill-score';
+      const answers = document.createElement('div');
+      answers.className = 'drill-answers';
+      const summary = document.createElement('div');
+      summary.className = 'drill-summary';
+      widget.append(playBtn, replayBtn, scoreEl, answers, summary);
+
+      let current = null; // {quality, notes}
+      let lastKey = null, asked = 0, right = 0, nextTimer = null;
+      const tally = {}; // quality -> [right, asked]
+      const btns = new Map();
+      for (const q of qualities) {
+        const b = document.createElement('button');
+        b.className = 'drill-ans';
+        b.textContent = qualLabel(q);
+        b.disabled = true;
+        b.onclick = () => answer(q);
+        btns.set(q, b);
+        answers.appendChild(b);
+      }
+
+      const playCurrent = () => { if (current) playChords([{ notes: current.notes, beats: 3 }], 80); };
+
+      function nextQuestion() {
+        clearTimeout(nextTimer);
+        let root, quality, key;
+        do {
+          root = roots[Math.floor(Math.random() * roots.length)];
+          quality = qualities[Math.floor(Math.random() * qualities.length)];
+          key = root + quality;
+        } while (key === lastKey && (roots.length > 1 || qualities.length > 1));
+        lastKey = key;
+        let notes = parseChord(key);
+        if (randomRegister) {
+          const shift = 12 * (Math.floor(Math.random() * 3) - 1);
+          notes = notes.map((n) => n + shift);
+        }
+        current = { quality, notes };
+        for (const b of btns.values()) { b.disabled = false; b.classList.remove('drill-right', 'drill-wrong'); }
+        replayBtn.disabled = false;
+        scoreEl.textContent = `${right}/${asked} · q${asked + 1} of ${count}`;
+        playCurrent();
+      }
+
+      function answer(q) {
+        if (!current) return;
+        const correct = current.quality;
+        asked++;
+        tally[correct] = tally[correct] || [0, 0];
+        tally[correct][1]++;
+        if (q === correct) { right++; tally[correct][0]++; }
+        btns.get(correct).classList.add('drill-right');
+        if (q !== correct) btns.get(q).classList.add('drill-wrong');
+        for (const b of btns.values()) b.disabled = true;
+        current = null;
+        scoreEl.textContent = `${right}/${asked}`;
+        if (asked >= count) return finish();
+        nextTimer = setTimeout(nextQuestion, q === correct ? 900 : 1800);
+      }
+
+      function finish() {
+        replayBtn.disabled = true;
+        const parts = qualities.filter((q) => tally[q]).map((q) => `${qualLabel(q)} ${tally[q][0]}/${tally[q][1]}`);
+        summary.textContent = `round done: ${right}/${asked}  (${parts.join(', ')})`;
+        playBtn.textContent = '▶ again';
+        asked = 0; right = 0; for (const q in tally) delete tally[q];
+      }
+
+      playBtn.onclick = () => { summary.textContent = ''; playBtn.textContent = '▶ start'; nextQuestion(); };
+      replayBtn.onclick = playCurrent;
+      return widget;
+    }
+
     function enhanceChords(root) {
+      for (const code of root.querySelectorAll('code.language-drill:not([data-chordified])')) {
+        code.dataset.chordified = '1';
+        const pre = code.closest('pre');
+        (pre || code).replaceWith(buildDrillWidget(code.textContent));
+      }
       for (const code of root.querySelectorAll('code.language-keyboard:not([data-chordified])')) {
         code.dataset.chordified = '1';
         const pre = code.closest('pre');
