@@ -679,7 +679,7 @@
       widget.append(playBtn, replayBtn, scoreEl, answers, reveal, summary);
 
       let current = null; // {quality, notes}
-      let lastKey = null, asked = 0, right = 0, nextTimer = null;
+      let lastKey = null, asked = 0, right = 0;
       const tally = {}; // quality -> [right, asked]
       // Adaptive weighting: misses make a quality more likely; persists across "again" rounds.
       const weights = new Map(qualities.map((q) => [q, 1]));
@@ -704,7 +704,8 @@
       const playCurrent = () => { if (current) playChords([{ notes: current.notes, beats: 3 }], 80); };
 
       function nextQuestion() {
-        clearTimeout(nextTimer);
+        playBtn.textContent = '▶ next';
+        playBtn.disabled = true; // answer first; replay is there for re-listens
         let root, quality, key;
         do {
           root = roots[Math.floor(Math.random() * roots.length)];
@@ -744,16 +745,12 @@
         for (const b of btns.values()) b.disabled = true;
         current = null;
         scoreEl.textContent = `${right}/${asked}`;
-        const isLast = asked >= count;
-        // Show what was actually played; click replays it (and buys reading time before auto-advance)
+        // Show what was actually played; click replays it. Advance is manual via "next".
         reveal.textContent = `played: ${played.label} — ${played.notes.map(midiToName).join(' ')} (click to replay)`;
         reveal.style.display = '';
-        reveal.onclick = () => {
-          playChords([{ notes: played.notes, beats: 3 }], 80);
-          if (!isLast) { clearTimeout(nextTimer); nextTimer = setTimeout(nextQuestion, 2600); }
-        };
-        if (isLast) return finish();
-        nextTimer = setTimeout(nextQuestion, q === correct ? 1300 : 2600);
+        reveal.onclick = () => playChords([{ notes: played.notes, beats: 3 }], 80);
+        if (asked >= count) return finish();
+        playBtn.disabled = false;
       }
 
       function finish() {
@@ -781,10 +778,11 @@
         summary.appendChild(document.createElement('br'));
         summary.appendChild(sendResBtn);
         playBtn.textContent = '▶ again';
+        playBtn.disabled = false;
         asked = 0; right = 0; for (const q in tally) delete tally[q];
       }
 
-      playBtn.onclick = () => { summary.textContent = ''; playBtn.textContent = '▶ start'; nextQuestion(); };
+      playBtn.onclick = () => { summary.textContent = ''; nextQuestion(); };
       replayBtn.onclick = playCurrent;
       return widget;
     }
