@@ -192,6 +192,10 @@ events.on('status', (status) => {
   broadcast({ type: 'status', status });
 });
 
+events.on('model', ({ served, expected, downgraded }) => {
+  broadcast({ type: 'model', served, expected, downgraded });
+});
+
 events.on('agent_start', (id, description) => {
   broadcast({ type: 'agent_start', id, description });
 });
@@ -627,6 +631,7 @@ app.get('/api/status', (req, res) => {
   const init = getInitInfo();
   res.json({
     model: init.model || config.model,
+    servedModel: init.servedModel || null,
     apiKeySource: init.apiKeySource,
     uptime: Math.floor((Date.now() - startTime) / 1000),
     sessionId: getSessionId(),

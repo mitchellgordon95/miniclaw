@@ -1511,6 +1511,19 @@
           removeAgent(data.id);
         } else if (data.type === 'error') {
           addMessage({ role: 'system', channel: 'web', content: `Error: ${data.message}` });
+        } else if (data.type === 'model') {
+          const modelEl = document.getElementById('model-info');
+          const short = (data.served || '').replace('claude-', '');
+          if (data.downgraded) {
+            modelEl.textContent = `⚠ ${short}`;
+            modelEl.className = 'text-xs text-red-400 font-medium';
+            modelEl.title = `Response served by ${data.served}, not ${data.expected}`;
+            addMessage({ role: 'system', channel: 'web', content: `⚠ This response was served by ${data.served} (configured model: ${data.expected}). Likely a safety-classifier fallback; sticky routing may keep serving it for up to ~1 hour.` });
+          } else {
+            modelEl.textContent = short;
+            modelEl.className = 'text-xs text-green-600';
+            modelEl.title = `Response served by ${data.served}`;
+          }
         }
       };
     }
@@ -1705,7 +1718,12 @@
     // --- Send ---
     function autoResize() {
       inputEl.style.height = 'auto';
-      inputEl.style.height = inputEl.scrollHeight + 'px';
+      // Cap the input at ~35% of the viewport; beyond that it scrolls internally
+      // instead of pushing the message list off screen (long dictated messages).
+      const maxH = Math.floor(window.innerHeight * 0.35);
+      const h = inputEl.scrollHeight;
+      inputEl.style.height = Math.min(h, maxH) + 'px';
+      inputEl.style.overflowY = h > maxH ? 'auto' : 'hidden';
     }
 
     // --- Outgoing message reliability ---
