@@ -1,0 +1,2290 @@
+{
+ "1-1": [
+  {
+   "hanzi": "西瓜",
+   "pinyin": "xī guā",
+   "english": "watermelon",
+   "file": "西瓜11.mp3"
+  },
+  {
+   "hanzi": "声音",
+   "pinyin": "shēng yīn",
+   "english": "sound, voice",
+   "file": "声音11.mp3"
+  },
+  {
+   "hanzi": "西安",
+   "pinyin": "xī ān",
+   "english": "Xi'an",
+   "file": "西安11.mp3"
+  },
+  {
+   "hanzi": "东方",
+   "pinyin": "dōng fāng",
+   "english": "the East",
+   "file": "东方11.mp3"
+  },
+  {
+   "hanzi": "巴西",
+   "pinyin": "bā xī",
+   "english": "Brazil",
+   "file": "巴西11.mp3"
+  },
+  {
+   "hanzi": "春天",
+   "pinyin": "chūn tiān",
+   "english": "spring",
+   "file": "春天11.mp3"
+  },
+  {
+   "hanzi": "操心",
+   "pinyin": "cāo xīn",
+   "english": "to worry",
+   "file": "操心11.mp3"
+  },
+  {
+   "hanzi": "轻松",
+   "pinyin": "qīng sōng",
+   "english": "light, relaxed",
+   "file": "轻松11.mp3"
+  },
+  {
+   "hanzi": "担心",
+   "pinyin": "dān xīn",
+   "english": "to worry",
+   "file": "担心11.mp3"
+  },
+  {
+   "hanzi": "关心",
+   "pinyin": "guān xīn",
+   "english": "to care about",
+   "file": "关心11.mp3"
+  },
+  {
+   "hanzi": "呼吸",
+   "pinyin": "hū xī",
+   "english": "to breathe",
+   "file": "呼吸11.mp3"
+  },
+  {
+   "hanzi": "身高",
+   "pinyin": "shēn gāo",
+   "english": "height (of a person)",
+   "file": "身高11.mp3"
+  },
+  {
+   "hanzi": "中医",
+   "pinyin": "zhōng yī",
+   "english": "Chinese medicine",
+   "file": "中医11.mp3"
+  },
+  {
+   "hanzi": "餐厅",
+   "pinyin": "cān tīng",
+   "english": "restaurant",
+   "file": "餐厅11.mp3"
+  },
+  {
+   "hanzi": "非洲",
+   "pinyin": "fēi zhōu",
+   "english": "Africa",
+   "file": "非洲11.mp3"
+  },
+  {
+   "hanzi": "周一",
+   "pinyin": "zhōu yī",
+   "english": "Monday",
+   "file": "周一11.mp3"
+  },
+  {
+   "hanzi": "抽烟",
+   "pinyin": "chōu yān",
+   "english": "to smoke",
+   "file": "抽烟11.mp3"
+  },
+  {
+   "hanzi": "中餐",
+   "pinyin": "zhōng cān",
+   "english": "Chinese food",
+   "file": "中餐11.mp3"
+  },
+  {
+   "hanzi": "出发",
+   "pinyin": "chū fā",
+   "english": "to set out",
+   "file": "出发11.mp3"
+  },
+  {
+   "hanzi": "出差",
+   "pinyin": "chū chāi",
+   "english": "to go on a business trip",
+   "file": "出差11.mp3"
+  },
+  {
+   "hanzi": "欧洲",
+   "pinyin": "ōu zhōu",
+   "english": "Europe",
+   "file": "欧洲11.mp3"
+  }
+ ],
+ "1-2": [
+  {
+   "hanzi": "天才",
+   "pinyin": "tiān cái",
+   "english": "genius",
+   "file": "天才12.mp3"
+  },
+  {
+   "hanzi": "家人",
+   "pinyin": "jiā rén",
+   "english": "family member",
+   "file": "家人12.mp3"
+  },
+  {
+   "hanzi": "拖鞋",
+   "pinyin": "tuō xié",
+   "english": "slippers",
+   "file": "拖鞋12.mp3"
+  },
+  {
+   "hanzi": "经常",
+   "pinyin": "jīng cháng",
+   "english": "often",
+   "file": "经常12.mp3"
+  },
+  {
+   "hanzi": "帮忙",
+   "pinyin": "bāng máng",
+   "english": "to help",
+   "file": "帮忙12.mp3"
+  },
+  {
+   "hanzi": "安排",
+   "pinyin": "ān pái",
+   "english": "to arrange",
+   "file": "安排12.mp3"
+  },
+  {
+   "hanzi": "英国",
+   "pinyin": "yīng guó",
+   "english": "the United Kingdom",
+   "file": "英国12.mp3"
+  },
+  {
+   "hanzi": "终于",
+   "pinyin": "zhōng yú",
+   "english": "finally",
+   "file": "终于12.mp3"
+  },
+  {
+   "hanzi": "家庭",
+   "pinyin": "jiā tíng",
+   "english": "family",
+   "file": "家庭12.mp3"
+  },
+  {
+   "hanzi": "坚持",
+   "pinyin": "jiān chí",
+   "english": "to persevere in",
+   "file": "坚持12.mp3"
+  },
+  {
+   "hanzi": "冰茶",
+   "pinyin": "bīng chá",
+   "english": "iced tea",
+   "file": "冰茶12.mp3"
+  },
+  {
+   "hanzi": "虽然",
+   "pinyin": "suī rán",
+   "english": "although",
+   "file": "虽然12.mp3"
+  },
+  {
+   "hanzi": "加油",
+   "pinyin": "jiā yóu",
+   "english": "come on, you can do this",
+   "file": "加油12.mp3"
+  },
+  {
+   "hanzi": "坚强",
+   "pinyin": "jiān qiáng",
+   "english": "strong",
+   "file": "坚强12.mp3"
+  },
+  {
+   "hanzi": "生活",
+   "pinyin": "shēng huó",
+   "english": "life",
+   "file": "生活12.mp3"
+  },
+  {
+   "hanzi": "妆容",
+   "pinyin": "zhuāng róng",
+   "english": "a look (from applying makeup)",
+   "file": "妆容12.mp3"
+  },
+  {
+   "hanzi": "功能",
+   "pinyin": "gōng néng",
+   "english": "function",
+   "file": "功能12.mp3"
+  },
+  {
+   "hanzi": "出国",
+   "pinyin": "chū guó",
+   "english": "to go abroad",
+   "file": "出国12.mp3"
+  },
+  {
+   "hanzi": "今年",
+   "pinyin": "jīn nián",
+   "english": "this year",
+   "file": "今年12.mp3"
+  },
+  {
+   "hanzi": "非常",
+   "pinyin": "fēi cháng",
+   "english": "very",
+   "file": "非常12.mp3"
+  }
+ ],
+ "1-3": [
+  {
+   "hanzi": "肩膀",
+   "pinyin": "jiān bǎng",
+   "english": "shoulder",
+   "file": "肩膀13.mp3"
+  },
+  {
+   "hanzi": "歌曲",
+   "pinyin": "gē qǔ",
+   "english": "song",
+   "file": "歌曲13.mp3"
+  },
+  {
+   "hanzi": "新手",
+   "pinyin": "xīn shǒu",
+   "english": "novice",
+   "file": "新手13.mp3"
+  },
+  {
+   "hanzi": "鸡腿",
+   "pinyin": "jī tuǐ",
+   "english": "chicken leg",
+   "file": "鸡腿13.mp3"
+  },
+  {
+   "hanzi": "多久",
+   "pinyin": "duō jiǔ",
+   "english": "how long",
+   "file": "多久13.mp3"
+  },
+  {
+   "hanzi": "经理",
+   "pinyin": "jīng lǐ",
+   "english": "manager",
+   "file": "经理13.mp3"
+  },
+  {
+   "hanzi": "增长",
+   "pinyin": "zēng zhǎng",
+   "english": "to increase",
+   "file": "增长13.mp3"
+  },
+  {
+   "hanzi": "精彩",
+   "pinyin": "jīng cǎi",
+   "english": "wonderful",
+   "file": "精彩13.mp3"
+  },
+  {
+   "hanzi": "街舞",
+   "pinyin": "jiē wǔ",
+   "english": "break dancing",
+   "file": "街舞13.mp3"
+  },
+  {
+   "hanzi": "烧烤",
+   "pinyin": "shāo kǎo",
+   "english": "to barbecue",
+   "file": "烧烤13.mp3"
+  },
+  {
+   "hanzi": "思考",
+   "pinyin": "sī kǎo",
+   "english": "to think deeply",
+   "file": "思考13.mp3"
+  },
+  {
+   "hanzi": "吃饱",
+   "pinyin": "chī bǎo",
+   "english": "to eat enough",
+   "file": "吃饱13.mp3"
+  },
+  {
+   "hanzi": "天使",
+   "pinyin": "tiān shǐ",
+   "english": "angel",
+   "file": "天使13.mp3"
+  },
+  {
+   "hanzi": "东北",
+   "pinyin": "dōng běi",
+   "english": "northeast",
+   "file": "东北13.mp3"
+  },
+  {
+   "hanzi": "微软",
+   "pinyin": "wēi ruǎn",
+   "english": "Microsoft",
+   "file": "微软13.mp3"
+  },
+  {
+   "hanzi": "挑选",
+   "pinyin": "tiāo xuǎn",
+   "english": "to select",
+   "file": "挑选13.mp3"
+  },
+  {
+   "hanzi": "积累",
+   "pinyin": "jī lěi",
+   "english": "to accumulate",
+   "file": "积累13.mp3"
+  },
+  {
+   "hanzi": "英语",
+   "pinyin": "yīng yǔ",
+   "english": "English (language)",
+   "file": "英语13.mp3"
+  },
+  {
+   "hanzi": "公里",
+   "pinyin": "gōng lǐ",
+   "english": "kilometer",
+   "file": "公里13.mp3"
+  },
+  {
+   "hanzi": "参考",
+   "pinyin": "cān kǎo",
+   "english": "to refer to",
+   "file": "参考13.mp3"
+  },
+  {
+   "hanzi": "喝水",
+   "pinyin": "hē shuǐ",
+   "english": "to drink water",
+   "file": "喝水13.mp3"
+  },
+  {
+   "hanzi": "更改",
+   "pinyin": "gēng gǎi",
+   "english": "to change",
+   "file": "更改13.mp3"
+  }
+ ],
+ "1-4": [
+  {
+   "hanzi": "帮助",
+   "pinyin": "bāng zhù",
+   "english": "to help",
+   "file": "帮助14.mp3"
+  },
+  {
+   "hanzi": "压力",
+   "pinyin": "yā lì",
+   "english": "pressure",
+   "file": "压力14.mp3"
+  },
+  {
+   "hanzi": "机遇",
+   "pinyin": "jī yù",
+   "english": "opportunity",
+   "file": "机遇14.mp3"
+  },
+  {
+   "hanzi": "经历",
+   "pinyin": "jīng lì",
+   "english": "experience",
+   "file": "经历14.mp3"
+  },
+  {
+   "hanzi": "商店",
+   "pinyin": "shāng diàn",
+   "english": "store",
+   "file": "商店14.mp3"
+  },
+  {
+   "hanzi": "发现",
+   "pinyin": "fā xiàn",
+   "english": "to find",
+   "file": "发现14.mp3"
+  },
+  {
+   "hanzi": "开会",
+   "pinyin": "kāi huì",
+   "english": "to hold a meeting",
+   "file": "开会14.mp3"
+  },
+  {
+   "hanzi": "因为",
+   "pinyin": "yīn wèi",
+   "english": "because",
+   "file": "因为14.mp3"
+  },
+  {
+   "hanzi": "说话",
+   "pinyin": "shuō huà",
+   "english": "to speak",
+   "file": "说话14.mp3"
+  },
+  {
+   "hanzi": "周末",
+   "pinyin": "zhōu mò",
+   "english": "weekend",
+   "file": "周末14.mp3"
+  },
+  {
+   "hanzi": "书店",
+   "pinyin": "shū diàn",
+   "english": "bookstore",
+   "file": "书店14.mp3"
+  },
+  {
+   "hanzi": "周六",
+   "pinyin": "zhōu liù",
+   "english": "Saturday",
+   "file": "周六14.mp3"
+  },
+  {
+   "hanzi": "家具",
+   "pinyin": "jiā jù",
+   "english": "furniture",
+   "file": "家具14.mp3"
+  },
+  {
+   "hanzi": "姿势",
+   "pinyin": "zī shì",
+   "english": "posture",
+   "file": "姿势14.mp3"
+  },
+  {
+   "hanzi": "接受",
+   "pinyin": "jiē shòu",
+   "english": "to accept",
+   "file": "接受14.mp3"
+  },
+  {
+   "hanzi": "接待",
+   "pinyin": "jiē dài",
+   "english": "to receive (a visitor)",
+   "file": "接待14.mp3"
+  },
+  {
+   "hanzi": "生命",
+   "pinyin": "shēng mìng",
+   "english": "life",
+   "file": "生命14.mp3"
+  },
+  {
+   "hanzi": "亲自",
+   "pinyin": "qīn zì",
+   "english": "personally",
+   "file": "亲自14.mp3"
+  },
+  {
+   "hanzi": "安静",
+   "pinyin": "ān jìng",
+   "english": "quiet",
+   "file": "安静14.mp3"
+  },
+  {
+   "hanzi": "机会",
+   "pinyin": "jī huì",
+   "english": "opportunity",
+   "file": "机会14.mp3"
+  },
+  {
+   "hanzi": "超越",
+   "pinyin": "chāo yuè",
+   "english": "to surpass",
+   "file": "超越14.mp3"
+  },
+  {
+   "hanzi": "吃饭",
+   "pinyin": "chī fàn",
+   "english": "to eat (food)",
+   "file": "吃饭14.mp3"
+  },
+  {
+   "hanzi": "方向",
+   "pinyin": "fāng xiàng",
+   "english": "direction",
+   "file": "方向14.mp3"
+  }
+ ],
+ "1-0": [
+  {
+   "hanzi": "箱子",
+   "pinyin": "xiāng zi",
+   "english": "box",
+   "file": "箱子15.mp3"
+  },
+  {
+   "hanzi": "姑姑",
+   "pinyin": "gū gu",
+   "english": "aunt (paternal)",
+   "file": "姑姑15.mp3"
+  },
+  {
+   "hanzi": "鸭子",
+   "pinyin": "yā zi",
+   "english": "duck",
+   "file": "鸭子15.mp3"
+  },
+  {
+   "hanzi": "多么",
+   "pinyin": "duō me",
+   "english": "how",
+   "file": "多么15.mp3"
+  },
+  {
+   "hanzi": "他的",
+   "pinyin": "tā de",
+   "english": "his",
+   "file": "他的15.mp3"
+  },
+  {
+   "hanzi": "哥哥",
+   "pinyin": "gē ge",
+   "english": "older brother",
+   "file": "哥哥15.mp3"
+  },
+  {
+   "hanzi": "包子",
+   "pinyin": "bāo zi",
+   "english": "steamed stuffed bun",
+   "file": "包子15.mp3"
+  },
+  {
+   "hanzi": "称呼",
+   "pinyin": "chēng hu",
+   "english": "to call",
+   "file": "称呼15.mp3"
+  },
+  {
+   "hanzi": "关系",
+   "pinyin": "guān xi",
+   "english": "relationship",
+   "file": "关系15.mp3"
+  },
+  {
+   "hanzi": "休息",
+   "pinyin": "xiū xi",
+   "english": "to rest",
+   "file": "休息15.mp3"
+  },
+  {
+   "hanzi": "师傅",
+   "pinyin": "shī fu",
+   "english": "master",
+   "file": "师傅15.mp3"
+  },
+  {
+   "hanzi": "收拾",
+   "pinyin": "shōu shi",
+   "english": "to pack",
+   "file": "收拾15.mp3"
+  },
+  {
+   "hanzi": "生意",
+   "pinyin": "shēng yi",
+   "english": "business",
+   "file": "生意15.mp3"
+  },
+  {
+   "hanzi": "衣服",
+   "pinyin": "yī fu",
+   "english": "clothes",
+   "file": "衣服15.mp3"
+  },
+  {
+   "hanzi": "杯子",
+   "pinyin": "bēi zi",
+   "english": "cup",
+   "file": "杯子15.mp3"
+  },
+  {
+   "hanzi": "知识",
+   "pinyin": "zhī shi",
+   "english": "knowledge",
+   "file": "知识15.mp3"
+  }
+ ],
+ "2-1": [
+  {
+   "hanzi": "平安",
+   "pinyin": "píng ān",
+   "english": "safe and sound",
+   "file": "平安21.mp3"
+  },
+  {
+   "hanzi": "晴天",
+   "pinyin": "qíng tiān",
+   "english": "sunny day",
+   "file": "晴天21.mp3"
+  },
+  {
+   "hanzi": "人生",
+   "pinyin": "rén shēng",
+   "english": "life",
+   "file": "人生21.mp3"
+  },
+  {
+   "hanzi": "南非",
+   "pinyin": "nán fēi",
+   "english": "South Africa",
+   "file": "南非21.mp3"
+  },
+  {
+   "hanzi": "皮肤",
+   "pinyin": "pí fū",
+   "english": "skin",
+   "file": "皮肤21.mp3"
+  },
+  {
+   "hanzi": "离婚",
+   "pinyin": "lí hūn",
+   "english": "to divorce",
+   "file": "离婚21.mp3"
+  },
+  {
+   "hanzi": "牙医",
+   "pinyin": "yá yī",
+   "english": "dentist",
+   "file": "牙医21.mp3"
+  },
+  {
+   "hanzi": "年轻",
+   "pinyin": "nián qīng",
+   "english": "young",
+   "file": "年轻21.mp3"
+  },
+  {
+   "hanzi": "学区",
+   "pinyin": "xué qū",
+   "english": "school district",
+   "file": "学区21.mp3"
+  },
+  {
+   "hanzi": "成功",
+   "pinyin": "chéng gōng",
+   "english": "to succeed",
+   "file": "成功21.mp3"
+  },
+  {
+   "hanzi": "龙虾",
+   "pinyin": "lóng xiā",
+   "english": "lobster",
+   "file": "龙虾21.mp3"
+  },
+  {
+   "hanzi": "明天",
+   "pinyin": "míng tiān",
+   "english": "tomorrow",
+   "file": "明天21.mp3"
+  },
+  {
+   "hanzi": "房间",
+   "pinyin": "fáng jiān",
+   "english": "room",
+   "file": "房间21.mp3"
+  },
+  {
+   "hanzi": "前天",
+   "pinyin": "qián tiān",
+   "english": "the day before yesterday",
+   "file": "前天21.mp3"
+  },
+  {
+   "hanzi": "读书",
+   "pinyin": "dú shū",
+   "english": "to read, to study",
+   "file": "读书21.mp3"
+  },
+  {
+   "hanzi": "滑冰",
+   "pinyin": "huá bīng",
+   "english": "to skate",
+   "file": "滑冰21.mp3"
+  },
+  {
+   "hanzi": "员工",
+   "pinyin": "yuán gōng",
+   "english": "employee",
+   "file": "员工21.mp3"
+  },
+  {
+   "hanzi": "台湾",
+   "pinyin": "tái wān",
+   "english": "Taiwan",
+   "file": "台湾21.mp3"
+  },
+  {
+   "hanzi": "厨师",
+   "pinyin": "chú shī",
+   "english": "chef",
+   "file": "厨师21.mp3"
+  }
+ ],
+ "2-2": [
+  {
+   "hanzi": "成员",
+   "pinyin": "chéng yuán",
+   "english": "member",
+   "file": "成员22.mp3"
+  },
+  {
+   "hanzi": "留学",
+   "pinyin": "liú xué",
+   "english": "to study abroad",
+   "file": "留学22.mp3"
+  },
+  {
+   "hanzi": "平常",
+   "pinyin": "píng cháng",
+   "english": "usually",
+   "file": "平常22.mp3"
+  },
+  {
+   "hanzi": "着急",
+   "pinyin": "zháo jí",
+   "english": "anxious",
+   "file": "着急22.mp3"
+  },
+  {
+   "hanzi": "成为",
+   "pinyin": "chéng wéi",
+   "english": "to become",
+   "file": "成为22.mp3"
+  },
+  {
+   "hanzi": "德文",
+   "pinyin": "dé wén",
+   "english": "German (language)",
+   "file": "德文22.mp3"
+  },
+  {
+   "hanzi": "回答",
+   "pinyin": "huí dá",
+   "english": "to reply",
+   "file": "回答22.mp3"
+  },
+  {
+   "hanzi": "民族",
+   "pinyin": "mín zú",
+   "english": "nationality",
+   "file": "民族22.mp3"
+  },
+  {
+   "hanzi": "由于",
+   "pinyin": "yóu yú",
+   "english": "due to",
+   "file": "由于22.mp3"
+  },
+  {
+   "hanzi": "学习",
+   "pinyin": "xué xí",
+   "english": "to learn",
+   "file": "学习22.mp3"
+  },
+  {
+   "hanzi": "辞职",
+   "pinyin": "cí zhí",
+   "english": "to resign",
+   "file": "辞职22.mp3"
+  },
+  {
+   "hanzi": "文明",
+   "pinyin": "wén míng",
+   "english": "civilization",
+   "file": "文明22.mp3"
+  },
+  {
+   "hanzi": "柠檬",
+   "pinyin": "níng méng",
+   "english": "lemon",
+   "file": "柠檬22.mp3"
+  },
+  {
+   "hanzi": "完全",
+   "pinyin": "wán quán",
+   "english": "completely",
+   "file": "完全22.mp3"
+  },
+  {
+   "hanzi": "常识",
+   "pinyin": "cháng shí",
+   "english": "common sense",
+   "file": "常识22.mp3"
+  },
+  {
+   "hanzi": "和平",
+   "pinyin": "hé píng",
+   "english": "peace",
+   "file": "和平22.mp3"
+  },
+  {
+   "hanzi": "长城",
+   "pinyin": "cháng chéng",
+   "english": "the Great Wall",
+   "file": "长城22.mp3"
+  },
+  {
+   "hanzi": "黄油",
+   "pinyin": "huáng yóu",
+   "english": "butter",
+   "file": "黄油22.mp3"
+  },
+  {
+   "hanzi": "牛排",
+   "pinyin": "niú pái",
+   "english": "steak",
+   "file": "牛排22.mp3"
+  }
+ ],
+ "2-3": [
+  {
+   "hanzi": "从小",
+   "pinyin": "cóng xiǎo",
+   "english": "from childhood",
+   "file": "从小23.mp3"
+  },
+  {
+   "hanzi": "房卡",
+   "pinyin": "fáng kǎ",
+   "english": "room card",
+   "file": "房卡23.mp3"
+  },
+  {
+   "hanzi": "寻找",
+   "pinyin": "xún zhǎo",
+   "english": "to seek",
+   "file": "寻找23.mp3"
+  },
+  {
+   "hanzi": "骑马",
+   "pinyin": "qí mǎ",
+   "english": "to ride a horse",
+   "file": "骑马23.mp3"
+  },
+  {
+   "hanzi": "合影",
+   "pinyin": "hé yǐng",
+   "english": "to take a group photo",
+   "file": "合影23.mp3"
+  },
+  {
+   "hanzi": "滑板",
+   "pinyin": "huá bǎn",
+   "english": "skateboard",
+   "file": "滑板23.mp3"
+  },
+  {
+   "hanzi": "结果",
+   "pinyin": "jié guǒ",
+   "english": "result",
+   "file": "结果23.mp3"
+  },
+  {
+   "hanzi": "停止",
+   "pinyin": "tíng zhǐ",
+   "english": "to stop",
+   "file": "停止23.mp3"
+  },
+  {
+   "hanzi": "甜点",
+   "pinyin": "tián diǎn",
+   "english": "dessert",
+   "file": "甜点23.mp3"
+  },
+  {
+   "hanzi": "来往",
+   "pinyin": "lái wǎng",
+   "english": "to have contact",
+   "file": "来往23.mp3"
+  },
+  {
+   "hanzi": "读者",
+   "pinyin": "dú zhě",
+   "english": "reader",
+   "file": "读者23.mp3"
+  },
+  {
+   "hanzi": "即使",
+   "pinyin": "jí shǐ",
+   "english": "even if",
+   "file": "即使23.mp3"
+  },
+  {
+   "hanzi": "泉水",
+   "pinyin": "quán shuǐ",
+   "english": "spring water",
+   "file": "泉水23.mp3"
+  },
+  {
+   "hanzi": "俗语",
+   "pinyin": "sú yǔ",
+   "english": "common saying",
+   "file": "俗语23.mp3"
+  },
+  {
+   "hanzi": "传统",
+   "pinyin": "chuán tǒng",
+   "english": "tradition",
+   "file": "传统23.mp3"
+  },
+  {
+   "hanzi": "职场",
+   "pinyin": "zhí chǎng",
+   "english": "workplace",
+   "file": "职场23.mp3"
+  },
+  {
+   "hanzi": "球场",
+   "pinyin": "qiú chǎng",
+   "english": "court, field",
+   "file": "球场23.mp3"
+  },
+  {
+   "hanzi": "烦恼",
+   "pinyin": "fán nǎo",
+   "english": "to be worried",
+   "file": "烦恼23.mp3"
+  },
+  {
+   "hanzi": "而且",
+   "pinyin": "ér qiě",
+   "english": "moreover",
+   "file": "而且23.mp3"
+  },
+  {
+   "hanzi": "和解",
+   "pinyin": "hé jiě",
+   "english": "to reconcile",
+   "file": "和解23.mp3"
+  },
+  {
+   "hanzi": "男友",
+   "pinyin": "nán yǒu",
+   "english": "boyfriend",
+   "file": "男友23.mp3"
+  },
+  {
+   "hanzi": "排骨",
+   "pinyin": "pái gǔ",
+   "english": "spare ribs",
+   "file": "排骨23.mp3"
+  }
+ ],
+ "2-4": [
+  {
+   "hanzi": "盒饭",
+   "pinyin": "hé fàn",
+   "english": "box lunch",
+   "file": "盒饭24.mp3"
+  },
+  {
+   "hanzi": "食物",
+   "pinyin": "shí wù",
+   "english": "food",
+   "file": "食物24.mp3"
+  },
+  {
+   "hanzi": "难过",
+   "pinyin": "nán guò",
+   "english": "sad",
+   "file": "难过24.mp3"
+  },
+  {
+   "hanzi": "职业",
+   "pinyin": "zhí yè",
+   "english": "profession",
+   "file": "职业24.mp3"
+  },
+  {
+   "hanzi": "无论",
+   "pinyin": "wú lùn",
+   "english": "regardless",
+   "file": "无论24.mp3"
+  },
+  {
+   "hanzi": "学校",
+   "pinyin": "xué xiào",
+   "english": "school",
+   "file": "学校24.mp3"
+  },
+  {
+   "hanzi": "牛肉",
+   "pinyin": "niú ròu",
+   "english": "beef",
+   "file": "牛肉24.mp3"
+  },
+  {
+   "hanzi": "节奏",
+   "pinyin": "jié zòu",
+   "english": "rhythm",
+   "file": "节奏24.mp3"
+  },
+  {
+   "hanzi": "蓝色",
+   "pinyin": "lán sè",
+   "english": "blue",
+   "file": "蓝色24.mp3"
+  },
+  {
+   "hanzi": "同意",
+   "pinyin": "tóng yì",
+   "english": "to agree",
+   "file": "同意24.mp3"
+  },
+  {
+   "hanzi": "团队",
+   "pinyin": "tuán duì",
+   "english": "team",
+   "file": "团队24.mp3"
+  },
+  {
+   "hanzi": "格式",
+   "pinyin": "gé shì",
+   "english": "format",
+   "file": "格式24.mp3"
+  },
+  {
+   "hanzi": "国内",
+   "pinyin": "guó nèi",
+   "english": "domestic",
+   "file": "国内24.mp3"
+  },
+  {
+   "hanzi": "颜色",
+   "pinyin": "yán sè",
+   "english": "color",
+   "file": "颜色24.mp3"
+  },
+  {
+   "hanzi": "环境",
+   "pinyin": "huán jìng",
+   "english": "environment",
+   "file": "环境24.mp3"
+  },
+  {
+   "hanzi": "不必",
+   "pinyin": "bú bì",
+   "english": "need not",
+   "file": "不必24.mp3"
+  },
+  {
+   "hanzi": "十月",
+   "pinyin": "shí yuè",
+   "english": "October",
+   "file": "十月24.mp3"
+  },
+  {
+   "hanzi": "决定",
+   "pinyin": "jué dìng",
+   "english": "to decide",
+   "file": "决定24.mp3"
+  },
+  {
+   "hanzi": "重复",
+   "pinyin": "chóng fù",
+   "english": "to repeat",
+   "file": "重复24.mp3"
+  },
+  {
+   "hanzi": "名片",
+   "pinyin": "míng piàn",
+   "english": "business card",
+   "file": "名片24.mp3"
+  },
+  {
+   "hanzi": "不过",
+   "pinyin": "bú guò",
+   "english": "but",
+   "file": "不过24.mp3"
+  },
+  {
+   "hanzi": "长发",
+   "pinyin": "cháng fà",
+   "english": "long hair",
+   "file": "长发24.mp3"
+  },
+  {
+   "hanzi": "长度",
+   "pinyin": "cháng dù",
+   "english": "length",
+   "file": "长度24.mp3"
+  }
+ ],
+ "2-0": [
+  {
+   "hanzi": "行李",
+   "pinyin": "xíng li",
+   "english": "luggage",
+   "file": "行李25.mp3"
+  },
+  {
+   "hanzi": "咱们",
+   "pinyin": "zán men",
+   "english": "we, us (includes listener)",
+   "file": "咱们25.mp3"
+  },
+  {
+   "hanzi": "蘑菇",
+   "pinyin": "mó gu",
+   "english": "mushroom",
+   "file": "蘑菇25.mp3"
+  },
+  {
+   "hanzi": "鼻子",
+   "pinyin": "bí zi",
+   "english": "nose",
+   "file": "鼻子25.mp3"
+  },
+  {
+   "hanzi": "瓶子",
+   "pinyin": "píng zi",
+   "english": "bottle",
+   "file": "瓶子25.mp3"
+  },
+  {
+   "hanzi": "脾气",
+   "pinyin": "pí qi",
+   "english": "temper",
+   "file": "脾气25.mp3"
+  },
+  {
+   "hanzi": "前面",
+   "pinyin": "qián mian",
+   "english": "front",
+   "file": "前面25.mp3"
+  },
+  {
+   "hanzi": "学生",
+   "pinyin": "xué sheng",
+   "english": "student",
+   "file": "学生25.mp3"
+  },
+  {
+   "hanzi": "时候",
+   "pinyin": "shí hou",
+   "english": "time",
+   "file": "时候25.mp3"
+  },
+  {
+   "hanzi": "馄饨",
+   "pinyin": "hún tun",
+   "english": "wonton",
+   "file": "馄饨25.mp3"
+  },
+  {
+   "hanzi": "明白",
+   "pinyin": "míng bai",
+   "english": "to understand",
+   "file": "明白25.mp3"
+  },
+  {
+   "hanzi": "绳子",
+   "pinyin": "shéng zi",
+   "english": "rope",
+   "file": "绳子25.mp3"
+  },
+  {
+   "hanzi": "篮子",
+   "pinyin": "lán zi",
+   "english": "basket",
+   "file": "篮子25.mp3"
+  },
+  {
+   "hanzi": "孩子",
+   "pinyin": "hái zi",
+   "english": "child",
+   "file": "孩子25.mp3"
+  },
+  {
+   "hanzi": "男的",
+   "pinyin": "nán de",
+   "english": "man",
+   "file": "男的25.mp3"
+  },
+  {
+   "hanzi": "名字",
+   "pinyin": "míng zi",
+   "english": "name",
+   "file": "名字25.mp3"
+  },
+  {
+   "hanzi": "儿子",
+   "pinyin": "ér zi",
+   "english": "son",
+   "file": "儿子25.mp3"
+  },
+  {
+   "hanzi": "头发",
+   "pinyin": "tóu fa",
+   "english": "hair",
+   "file": "头发25.mp3"
+  }
+ ],
+ "3-1": [
+  {
+   "hanzi": "整天",
+   "pinyin": "zhěng tiān",
+   "english": "all day long",
+   "file": "整天31.mp3"
+  },
+  {
+   "hanzi": "女生",
+   "pinyin": "nǚ shēng",
+   "english": "girl",
+   "file": "女生31.mp3"
+  },
+  {
+   "hanzi": "海边",
+   "pinyin": "hǎi biān",
+   "english": "beach",
+   "file": "海边31.mp3"
+  },
+  {
+   "hanzi": "雨天",
+   "pinyin": "yǔ tiān",
+   "english": "rainy day",
+   "file": "雨天31.mp3"
+  },
+  {
+   "hanzi": "火车",
+   "pinyin": "huǒ chē",
+   "english": "train",
+   "file": "火车31.mp3"
+  },
+  {
+   "hanzi": "始终",
+   "pinyin": "shǐ zhōng",
+   "english": "all along",
+   "file": "始终31.mp3"
+  },
+  {
+   "hanzi": "简单",
+   "pinyin": "jiǎn dān",
+   "english": "simple",
+   "file": "简单31.mp3"
+  },
+  {
+   "hanzi": "晚餐",
+   "pinyin": "wǎn cān",
+   "english": "dinner",
+   "file": "晚餐31.mp3"
+  },
+  {
+   "hanzi": "已经",
+   "pinyin": "yǐ jīng",
+   "english": "already",
+   "file": "已经31.mp3"
+  },
+  {
+   "hanzi": "买单",
+   "pinyin": "mǎi dān",
+   "english": "to pay the bill (at a restaurant)",
+   "file": "买单31.mp3"
+  },
+  {
+   "hanzi": "总之",
+   "pinyin": "zǒng zhī",
+   "english": "in short",
+   "file": "总之31.mp3"
+  },
+  {
+   "hanzi": "午休",
+   "pinyin": "wǔ xiū",
+   "english": "lunch break",
+   "file": "午休31.mp3"
+  },
+  {
+   "hanzi": "酒吧",
+   "pinyin": "jiǔ bā",
+   "english": "bar",
+   "file": "酒吧31.mp3"
+  },
+  {
+   "hanzi": "海关",
+   "pinyin": "hǎi guān",
+   "english": "customs",
+   "file": "海关31.mp3"
+  },
+  {
+   "hanzi": "火山",
+   "pinyin": "huǒ shān",
+   "english": "volcano",
+   "file": "火山31.mp3"
+  },
+  {
+   "hanzi": "老家",
+   "pinyin": "lǎo jiā",
+   "english": "place of origin",
+   "file": "老家31.mp3"
+  },
+  {
+   "hanzi": "卡车",
+   "pinyin": "kǎ chē",
+   "english": "truck",
+   "file": "卡车31.mp3"
+  },
+  {
+   "hanzi": "口音",
+   "pinyin": "kǒu yīn",
+   "english": "accent",
+   "file": "口音31.mp3"
+  },
+  {
+   "hanzi": "火锅",
+   "pinyin": "huǒ guō",
+   "english": "hotpot",
+   "file": "火锅31.mp3"
+  },
+  {
+   "hanzi": "烤鸡",
+   "pinyin": "kǎo jī",
+   "english": "roast chicken",
+   "file": "烤鸡31.mp3"
+  },
+  {
+   "hanzi": "每天",
+   "pinyin": "měi tiān",
+   "english": "every day",
+   "file": "每天31.mp3"
+  }
+ ],
+ "3-2": [
+  {
+   "hanzi": "本来",
+   "pinyin": "běn lái",
+   "english": "originally",
+   "file": "本来32.mp3"
+  },
+  {
+   "hanzi": "饮食",
+   "pinyin": "yǐn shí",
+   "english": "diet",
+   "file": "饮食32.mp3"
+  },
+  {
+   "hanzi": "场合",
+   "pinyin": "chǎng hé",
+   "english": "occasion",
+   "file": "场合32.mp3"
+  },
+  {
+   "hanzi": "雪人",
+   "pinyin": "xuě rén",
+   "english": "snowman",
+   "file": "雪人32.mp3"
+  },
+  {
+   "hanzi": "北极",
+   "pinyin": "běi jí",
+   "english": "the Arctic Pole",
+   "file": "北极32.mp3"
+  },
+  {
+   "hanzi": "打球",
+   "pinyin": "dǎ qiú",
+   "english": "to play ball",
+   "file": "打球32.mp3"
+  },
+  {
+   "hanzi": "旅游",
+   "pinyin": "lǚ yóu",
+   "english": "to travel",
+   "file": "旅游32.mp3"
+  },
+  {
+   "hanzi": "可能",
+   "pinyin": "kě néng",
+   "english": "maybe",
+   "file": "可能32.mp3"
+  },
+  {
+   "hanzi": "等于",
+   "pinyin": "děng yú",
+   "english": "to be equal too",
+   "file": "等于32.mp3"
+  },
+  {
+   "hanzi": "老人",
+   "pinyin": "lǎo rén",
+   "english": "the elderly",
+   "file": "老人32.mp3"
+  },
+  {
+   "hanzi": "有名",
+   "pinyin": "yǒu míng",
+   "english": "famous",
+   "file": "有名32.mp3"
+  },
+  {
+   "hanzi": "感情",
+   "pinyin": "gǎn qíng",
+   "english": "feeling",
+   "file": "感情32.mp3"
+  },
+  {
+   "hanzi": "感觉",
+   "pinyin": "gǎn jué",
+   "english": "to feel",
+   "file": "感觉32.mp3"
+  },
+  {
+   "hanzi": "主持",
+   "pinyin": "zhǔ chí",
+   "english": "to host",
+   "file": "主持32.mp3"
+  },
+  {
+   "hanzi": "友情",
+   "pinyin": "yǒu qíng",
+   "english": "friendship",
+   "file": "友情32.mp3"
+  },
+  {
+   "hanzi": "紧急",
+   "pinyin": "jǐn jí",
+   "english": "urgent",
+   "file": "紧急32.mp3"
+  },
+  {
+   "hanzi": "美元",
+   "pinyin": "měi yuán",
+   "english": "US dollar",
+   "file": "美元32.mp3"
+  },
+  {
+   "hanzi": "总结",
+   "pinyin": "zǒng jié",
+   "english": "to sum up",
+   "file": "总结32.mp3"
+  },
+  {
+   "hanzi": "主人",
+   "pinyin": "zhǔ rén",
+   "english": "host",
+   "file": "主人32.mp3"
+  }
+ ],
+ "3-4": [
+  {
+   "hanzi": "赶快",
+   "pinyin": "gǎn kuài",
+   "english": "at once",
+   "file": "赶快34.mp3"
+  },
+  {
+   "hanzi": "保护",
+   "pinyin": "bǎo hù",
+   "english": "to protect",
+   "file": "保护34.mp3"
+  },
+  {
+   "hanzi": "好运",
+   "pinyin": "hǎo yùn",
+   "english": "good luck",
+   "file": "好运34.mp3"
+  },
+  {
+   "hanzi": "可是",
+   "pinyin": "kě shì",
+   "english": "but",
+   "file": "可是34.mp3"
+  },
+  {
+   "hanzi": "肯定",
+   "pinyin": "kěn dìng",
+   "english": "certainly",
+   "file": "肯定34.mp3"
+  },
+  {
+   "hanzi": "可爱",
+   "pinyin": "kě ài",
+   "english": "cute",
+   "file": "可爱34.mp3"
+  },
+  {
+   "hanzi": "等候",
+   "pinyin": "děng hòu",
+   "english": "to wait",
+   "file": "等候34.mp3"
+  },
+  {
+   "hanzi": "解释",
+   "pinyin": "jiě shì",
+   "english": "to explain",
+   "file": "解释34.mp3"
+  },
+  {
+   "hanzi": "炒面",
+   "pinyin": "chǎo miàn",
+   "english": "fried noodles",
+   "file": "炒面34.mp3"
+  },
+  {
+   "hanzi": "股市",
+   "pinyin": "gǔ shì",
+   "english": "stock market",
+   "file": "股市34.mp3"
+  },
+  {
+   "hanzi": "紫色",
+   "pinyin": "zǐ sè",
+   "english": "purple",
+   "file": "紫色34.mp3"
+  },
+  {
+   "hanzi": "宠物",
+   "pinyin": "chǒng wù",
+   "english": "pet",
+   "file": "宠物34.mp3"
+  },
+  {
+   "hanzi": "礼物",
+   "pinyin": "lǐ wù",
+   "english": "gift",
+   "file": "礼物34.mp3"
+  },
+  {
+   "hanzi": "感受",
+   "pinyin": "gǎn shòu",
+   "english": "feeling",
+   "file": "感受34.mp3"
+  },
+  {
+   "hanzi": "使用",
+   "pinyin": "shǐ yòng",
+   "english": "to use",
+   "file": "使用34.mp3"
+  },
+  {
+   "hanzi": "此外",
+   "pinyin": "cǐ wài",
+   "english": "in addition",
+   "file": "此外34.mp3"
+  },
+  {
+   "hanzi": "美丽",
+   "pinyin": "měi lì",
+   "english": "beautiful",
+   "file": "美丽34.mp3"
+  },
+  {
+   "hanzi": "礼拜",
+   "pinyin": "lǐ bài",
+   "english": "week",
+   "file": "礼拜34.mp3"
+  },
+  {
+   "hanzi": "鼓励",
+   "pinyin": "gǔ lì",
+   "english": "to encourage",
+   "file": "鼓励34.mp3"
+  },
+  {
+   "hanzi": "炒饭",
+   "pinyin": "chǎo fàn",
+   "english": "fried rice",
+   "file": "炒饭34.mp3"
+  },
+  {
+   "hanzi": "小费",
+   "pinyin": "xiǎo fèi",
+   "english": "tip, gratuity",
+   "file": "小费34.mp3"
+  }
+ ],
+ "3-0": [
+  {
+   "hanzi": "宝宝",
+   "pinyin": "bǎo bao",
+   "english": "baby",
+   "file": "宝宝35.mp3"
+  },
+  {
+   "hanzi": "早上",
+   "pinyin": "zǎo shang",
+   "english": "morning",
+   "file": "早上35.mp3"
+  },
+  {
+   "hanzi": "奶奶",
+   "pinyin": "nǎi nai",
+   "english": "grandmother (paternal)",
+   "file": "奶奶35.mp3"
+  },
+  {
+   "hanzi": "晚上",
+   "pinyin": "wǎn shang",
+   "english": "night",
+   "file": "晚上35.mp3"
+  },
+  {
+   "hanzi": "姐姐",
+   "pinyin": "jiě jie",
+   "english": "older sister",
+   "file": "姐姐35.mp3"
+  },
+  {
+   "hanzi": "买卖",
+   "pinyin": "mǎi mai",
+   "english": "deal, business",
+   "file": "买卖35.mp3"
+  },
+  {
+   "hanzi": "眼睛",
+   "pinyin": "yǎn jing",
+   "english": "eye",
+   "file": "眼睛35.mp3"
+  },
+  {
+   "hanzi": "我们",
+   "pinyin": "wǒ men",
+   "english": "we, us",
+   "file": "我们35.mp3"
+  },
+  {
+   "hanzi": "点心",
+   "pinyin": "diǎn xin",
+   "english": "dessert",
+   "file": "点心35.mp3"
+  },
+  {
+   "hanzi": "本子",
+   "pinyin": "běn zi",
+   "english": "book",
+   "file": "本子35.mp3"
+  },
+  {
+   "hanzi": "种子",
+   "pinyin": "zhǒng zi",
+   "english": "seed",
+   "file": "种子35.mp3"
+  },
+  {
+   "hanzi": "你的",
+   "pinyin": "nǐ de",
+   "english": "your",
+   "file": "你的35.mp3"
+  },
+  {
+   "hanzi": "打算",
+   "pinyin": "dǎ suan",
+   "english": "to plan",
+   "file": "打算35.mp3"
+  },
+  {
+   "hanzi": "耳朵",
+   "pinyin": "ěr duo",
+   "english": "ear",
+   "file": "耳朵35.mp3"
+  }
+ ],
+ "4-1": [
+  {
+   "hanzi": "面包",
+   "pinyin": "miàn bāo",
+   "english": "bread",
+   "file": "面包41.mp3"
+  },
+  {
+   "hanzi": "故宫",
+   "pinyin": "gù gōng",
+   "english": "the Imperial Palace",
+   "file": "故宫41.mp3"
+  },
+  {
+   "hanzi": "日期",
+   "pinyin": "rì qī",
+   "english": "date",
+   "file": "日期41.mp3"
+  },
+  {
+   "hanzi": "律师",
+   "pinyin": "lǜ shī",
+   "english": "lawyer",
+   "file": "律师41.mp3"
+  },
+  {
+   "hanzi": "目标",
+   "pinyin": "mù biāo",
+   "english": "goal",
+   "file": "目标41.mp3"
+  },
+  {
+   "hanzi": "菜单",
+   "pinyin": "cài dān",
+   "english": "menu",
+   "file": "菜单41.mp3"
+  },
+  {
+   "hanzi": "互相",
+   "pinyin": "hù xiāng",
+   "english": "each other",
+   "file": "互相41.mp3"
+  },
+  {
+   "hanzi": "菜花",
+   "pinyin": "cài huā",
+   "english": "cauliflower",
+   "file": "菜花41.mp3"
+  },
+  {
+   "hanzi": "万一",
+   "pinyin": "wàn yī",
+   "english": "just in case",
+   "file": "万一41.mp3"
+  },
+  {
+   "hanzi": "父亲",
+   "pinyin": "fù qīn",
+   "english": "father",
+   "file": "父亲41.mp3"
+  },
+  {
+   "hanzi": "校车",
+   "pinyin": "xiào chē",
+   "english": "school bus",
+   "file": "校车41.mp3"
+  },
+  {
+   "hanzi": "唱歌",
+   "pinyin": "chàng gē",
+   "english": "to sing (songs)",
+   "file": "唱歌41.mp3"
+  },
+  {
+   "hanzi": "外公",
+   "pinyin": "wài gōng",
+   "english": "grandfather (maternal)",
+   "file": "外公41.mp3"
+  },
+  {
+   "hanzi": "汽车",
+   "pinyin": "qì chē",
+   "english": "car",
+   "file": "汽车41.mp3"
+  },
+  {
+   "hanzi": "信息",
+   "pinyin": "xìn xī",
+   "english": "information",
+   "file": "信息41.mp3"
+  },
+  {
+   "hanzi": "必须",
+   "pinyin": "bì xū",
+   "english": "must",
+   "file": "必须41.mp3"
+  },
+  {
+   "hanzi": "地瓜",
+   "pinyin": "dì guā",
+   "english": "sweet potato",
+   "file": "地瓜41.mp3"
+  },
+  {
+   "hanzi": "大街",
+   "pinyin": "dà jiē",
+   "english": "street",
+   "file": "大街41.mp3"
+  },
+  {
+   "hanzi": "大约",
+   "pinyin": "dà yuē",
+   "english": "about",
+   "file": "大约41.mp3"
+  },
+  {
+   "hanzi": "蛋糕",
+   "pinyin": "dàn gāo",
+   "english": "cake",
+   "file": "蛋糕41.mp3"
+  },
+  {
+   "hanzi": "客厅",
+   "pinyin": "kè tīng",
+   "english": "living room",
+   "file": "客厅41.mp3"
+  }
+ ],
+ "4-2": [
+  {
+   "hanzi": "目前",
+   "pinyin": "mù qián",
+   "english": "at the moment",
+   "file": "目前42.mp3"
+  },
+  {
+   "hanzi": "绿茶",
+   "pinyin": "lǜ chá",
+   "english": "green tea",
+   "file": "绿茶42.mp3"
+  },
+  {
+   "hanzi": "话题",
+   "pinyin": "huà tí",
+   "english": "topic of conversation",
+   "file": "话题42.mp3"
+  },
+  {
+   "hanzi": "不同",
+   "pinyin": "bù tóng",
+   "english": "different",
+   "file": "不同42.mp3"
+  },
+  {
+   "hanzi": "好学",
+   "pinyin": "hào xué",
+   "english": "to be eager to learn",
+   "file": "好学42.mp3"
+  },
+  {
+   "hanzi": "棒球",
+   "pinyin": "bàng qiú",
+   "english": "baseball",
+   "file": "棒球42.mp3"
+  },
+  {
+   "hanzi": "客人",
+   "pinyin": "kè rén",
+   "english": "guest",
+   "file": "客人42.mp3"
+  },
+  {
+   "hanzi": "电池",
+   "pinyin": "diàn chí",
+   "english": "battery",
+   "file": "电池42.mp3"
+  },
+  {
+   "hanzi": "化学",
+   "pinyin": "huà xué",
+   "english": "chemistry",
+   "file": "化学42.mp3"
+  },
+  {
+   "hanzi": "地图",
+   "pinyin": "dì tú",
+   "english": "map",
+   "file": "地图42.mp3"
+  },
+  {
+   "hanzi": "过程",
+   "pinyin": "guò chéng",
+   "english": "process",
+   "file": "过程42.mp3"
+  },
+  {
+   "hanzi": "复习",
+   "pinyin": "fù xí",
+   "english": "to review",
+   "file": "复习42.mp3"
+  },
+  {
+   "hanzi": "后来",
+   "pinyin": "hòu lái",
+   "english": "afterwards",
+   "file": "后来42.mp3"
+  },
+  {
+   "hanzi": "视频",
+   "pinyin": "shì pín",
+   "english": "video",
+   "file": "视频42.mp3"
+  },
+  {
+   "hanzi": "确实",
+   "pinyin": "què shí",
+   "english": "indeed",
+   "file": "确实42.mp3"
+  },
+  {
+   "hanzi": "付钱",
+   "pinyin": "fù qián",
+   "english": "to pay money",
+   "file": "付钱42.mp3"
+  },
+  {
+   "hanzi": "日常",
+   "pinyin": "rì cháng",
+   "english": "daily",
+   "file": "日常42.mp3"
+  },
+  {
+   "hanzi": "任何",
+   "pinyin": "rèn hé",
+   "english": "any",
+   "file": "任何42.mp3"
+  }
+ ],
+ "4-3": [
+  {
+   "hanzi": "号码",
+   "pinyin": "hào mǎ",
+   "english": "number",
+   "file": "号码43.mp3"
+  },
+  {
+   "hanzi": "或者",
+   "pinyin": "huò zhě",
+   "english": "or",
+   "file": "或者43.mp3"
+  },
+  {
+   "hanzi": "市场",
+   "pinyin": "shì chǎng",
+   "english": "market",
+   "file": "市场43.mp3"
+  },
+  {
+   "hanzi": "课本",
+   "pinyin": "kè běn",
+   "english": "textbook",
+   "file": "课本43.mp3"
+  },
+  {
+   "hanzi": "大腿",
+   "pinyin": "dà tuǐ",
+   "english": "thigh",
+   "file": "大腿43.mp3"
+  },
+  {
+   "hanzi": "不管",
+   "pinyin": "bù guǎn",
+   "english": "regardless of",
+   "file": "不管43.mp3"
+  },
+  {
+   "hanzi": "跳舞",
+   "pinyin": "tiào wǔ",
+   "english": "to dance",
+   "file": "跳舞43.mp3"
+  },
+  {
+   "hanzi": "下雨",
+   "pinyin": "xià yǔ",
+   "english": "to rain",
+   "file": "下雨43.mp3"
+  },
+  {
+   "hanzi": "不久",
+   "pinyin": "bù jiǔ",
+   "english": "not long after",
+   "file": "不久43.mp3"
+  },
+  {
+   "hanzi": "菜谱",
+   "pinyin": "cài pǔ",
+   "english": "menu",
+   "file": "菜谱43.mp3"
+  },
+  {
+   "hanzi": "电影",
+   "pinyin": "diàn yǐng",
+   "english": "movie",
+   "file": "电影43.mp3"
+  },
+  {
+   "hanzi": "借口",
+   "pinyin": "jiè kǒu",
+   "english": "excuse",
+   "file": "借口43.mp3"
+  },
+  {
+   "hanzi": "跳水",
+   "pinyin": "tiào shuǐ",
+   "english": "to dive",
+   "file": "跳水43.mp3"
+  },
+  {
+   "hanzi": "靠谱",
+   "pinyin": "kào pǔ",
+   "english": "reliable",
+   "file": "靠谱43.mp3"
+  },
+  {
+   "hanzi": "这里",
+   "pinyin": "zhè lǐ",
+   "english": "here",
+   "file": "这里43.mp3"
+  },
+  {
+   "hanzi": "大雪",
+   "pinyin": "dà xuě",
+   "english": "heavy snow",
+   "file": "大雪43.mp3"
+  },
+  {
+   "hanzi": "地铁",
+   "pinyin": "dì tiě",
+   "english": "subway",
+   "file": "地铁43.mp3"
+  },
+  {
+   "hanzi": "上海",
+   "pinyin": "shàng hǎi",
+   "english": "Shanghai",
+   "file": "上海43.mp3"
+  }
+ ],
+ "4-4": [
+  {
+   "hanzi": "日历",
+   "pinyin": "rì lì",
+   "english": "calendar",
+   "file": "日历44.mp3"
+  },
+  {
+   "hanzi": "报告",
+   "pinyin": "bào gào",
+   "english": "to report",
+   "file": "报告44.mp3"
+  },
+  {
+   "hanzi": "对话",
+   "pinyin": "duì huà",
+   "english": "dialogue",
+   "file": "对话44.mp3"
+  },
+  {
+   "hanzi": "个性",
+   "pinyin": "gè xìng",
+   "english": "personality",
+   "file": "个性44.mp3"
+  },
+  {
+   "hanzi": "锻炼",
+   "pinyin": "duàn liàn",
+   "english": "to exercise",
+   "file": "锻炼44.mp3"
+  },
+  {
+   "hanzi": "顾客",
+   "pinyin": "gù kè",
+   "english": "customer",
+   "file": "顾客44.mp3"
+  },
+  {
+   "hanzi": "睡觉",
+   "pinyin": "shuì jiào",
+   "english": "to sleep",
+   "file": "睡觉44.mp3"
+  },
+  {
+   "hanzi": "客户",
+   "pinyin": "kè hù",
+   "english": "client",
+   "file": "客户44.mp3"
+  },
+  {
+   "hanzi": "日记",
+   "pinyin": "rì jì",
+   "english": "diary",
+   "file": "日记44.mp3"
+  },
+  {
+   "hanzi": "味道",
+   "pinyin": "wèi dào",
+   "english": "taste",
+   "file": "味道44.mp3"
+  },
+  {
+   "hanzi": "电视",
+   "pinyin": "diàn shì",
+   "english": "TV",
+   "file": "电视44.mp3"
+  },
+  {
+   "hanzi": "快乐",
+   "pinyin": "kuài lè",
+   "english": "happy",
+   "file": "快乐44.mp3"
+  },
+  {
+   "hanzi": "信号",
+   "pinyin": "xìn hào",
+   "english": "signal",
+   "file": "信号44.mp3"
+  },
+  {
+   "hanzi": "教练",
+   "pinyin": "jiào liàn",
+   "english": "coach",
+   "file": "教练44.mp3"
+  },
+  {
+   "hanzi": "散步",
+   "pinyin": "sàn bù",
+   "english": "to take a walk",
+   "file": "散步44.mp3"
+  },
+  {
+   "hanzi": "变化",
+   "pinyin": "biàn huà",
+   "english": "to change",
+   "file": "变化44.mp3"
+  },
+  {
+   "hanzi": "重要",
+   "pinyin": "zhòng yào",
+   "english": "important",
+   "file": "重要44.mp3"
+  },
+  {
+   "hanzi": "信用",
+   "pinyin": "xìn yòng",
+   "english": "credit",
+   "file": "信用44.mp3"
+  },
+  {
+   "hanzi": "庆祝",
+   "pinyin": "qìng zhù",
+   "english": "celebrate",
+   "file": "庆祝44.mp3"
+  },
+  {
+   "hanzi": "但是",
+   "pinyin": "dàn shì",
+   "english": "but",
+   "file": "但是44.mp3"
+  },
+  {
+   "hanzi": "计较",
+   "pinyin": "jì jiào",
+   "english": "to haggle over",
+   "file": "计较44.mp3"
+  },
+  {
+   "hanzi": "画画",
+   "pinyin": "huà huà",
+   "english": "to draw",
+   "file": "画画44.mp3"
+  }
+ ],
+ "4-0": [
+  {
+   "hanzi": "记性",
+   "pinyin": "jì xing",
+   "english": "memory",
+   "file": "记性45.mp3"
+  },
+  {
+   "hanzi": "厉害",
+   "pinyin": "lì hai",
+   "english": "impressive",
+   "file": "厉害45.mp3"
+  },
+  {
+   "hanzi": "爸爸",
+   "pinyin": "bà ba",
+   "english": "father",
+   "file": "爸爸45.mp3"
+  },
+  {
+   "hanzi": "力气",
+   "pinyin": "lì qi",
+   "english": "strength",
+   "file": "力气45.mp3"
+  },
+  {
+   "hanzi": "告诉",
+   "pinyin": "gào su",
+   "english": "to tell",
+   "file": "告诉45.mp3"
+  },
+  {
+   "hanzi": "算了",
+   "pinyin": "suàn le",
+   "english": "forget about it",
+   "file": "算了45.mp3"
+  },
+  {
+   "hanzi": "热闹",
+   "pinyin": "rè nao",
+   "english": "lively",
+   "file": "热闹45.mp3"
+  },
+  {
+   "hanzi": "芥末",
+   "pinyin": "jiè mo",
+   "english": "mustard",
+   "file": "芥末45.mp3"
+  },
+  {
+   "hanzi": "太太",
+   "pinyin": "tài tai",
+   "english": "wife",
+   "file": "太太45.mp3"
+  },
+  {
+   "hanzi": "个子",
+   "pinyin": "gè zi",
+   "english": "height",
+   "file": "个子45.mp3"
+  },
+  {
+   "hanzi": "袜子",
+   "pinyin": "wà zi",
+   "english": "sock",
+   "file": "袜子45.mp3"
+  },
+  {
+   "hanzi": "地方",
+   "pinyin": "dì fang",
+   "english": "place",
+   "file": "地方45.mp3"
+  },
+  {
+   "hanzi": "意思",
+   "pinyin": "yì si",
+   "english": "meaning",
+   "file": "意思45.mp3"
+  },
+  {
+   "hanzi": "笑话",
+   "pinyin": "xiào hua",
+   "english": "joke",
+   "file": "笑话45.mp3"
+  },
+  {
+   "hanzi": "样子",
+   "pinyin": "yàng zi",
+   "english": "appearance",
+   "file": "样子45.mp3"
+  },
+  {
+   "hanzi": "客气",
+   "pinyin": "kè qi",
+   "english": "polite",
+   "file": "客气45.mp3"
+  },
+  {
+   "hanzi": "丈夫",
+   "pinyin": "zhàng fu",
+   "english": "husband",
+   "file": "丈夫45.mp3"
+  },
+  {
+   "hanzi": "豆腐",
+   "pinyin": "dòu fu",
+   "english": "tofu",
+   "file": "豆腐45.mp3"
+  }
+ ]
+}
