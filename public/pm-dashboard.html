@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PM Dashboard</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #ddd;
+         display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+  .box { text-align: center; }
+  input { padding: 8px; width: 280px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 4px; }
+  button { padding: 8px 16px; margin-left: 8px; cursor: pointer; }
+  .err { color: #e66; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="box" id="ui">
+  <p>Loading dashboard&hellip;</p>
+</div>
+<script>
+(function () {
+  // Accept ?token= once, persist it, then scrub it from the URL/history.
+  const params = new URLSearchParams(location.search);
+  if (params.get('token')) {
+    localStorage.setItem('miniclaw-token', params.get('token'));
+    history.replaceState(null, '', location.pathname);
+  }
+
+  function askToken(msg) {
+    document.getElementById('ui').innerHTML =
+      '<p>' + msg + '</p>' +
+      '<input id="tok" type="password" placeholder="miniclaw auth token">' +
+      '<button onclick="window._go(document.getElementById(\'tok\').value)">Open</button>';
+  }
+
+  window._go = function (tok) {
+    if (!tok) return;
+    localStorage.setItem('miniclaw-token', tok);
+    load();
+  };
+
+  function load() {
+    const token = localStorage.getItem('miniclaw-token');
+    if (!token) return askToken('Enter your miniclaw token to view the dashboard.');
+    fetch('/api/pm/dashboard', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function (r) {
+        if (r.status === 401) { localStorage.removeItem('miniclaw-token'); throw new Error('Bad token.'); }
+        if (r.status === 404) { throw new Error('Dashboard not generated yet - check back after the next hourly regen.'); }
+        if (!r.ok) { throw new Error('Fetch failed (' + r.status + ').'); }
+        return r.text();
+      })
+      .then(function (html) { document.open(); document.write(html); document.close(); })
+      .catch(function (e) { askToken('<span class="err">' + e.message + '</span>'); });
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

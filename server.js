@@ -641,9 +641,16 @@ app.get('/api/status', (req, res) => {
 });
 
 // Prediction-markets dashboard: static file regenerated hourly by the pm user's
-// cron (see ~pm/prediction_markets/code/server/). Token-authed by design; do not
-// make public without Mitchell's explicit OK.
+// cron (see ~pm/prediction_markets/code/server/). The bare route serves an
+// unauthenticated shell (no data) that pulls the token from localStorage
+// ('miniclaw-token', same key as the web UI) and fetches the real content from
+// the authed endpoint below. Content stays token-gated; do not weaken without
+// Mitchell's explicit OK.
 app.get('/pm/dashboard', (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'pm-dashboard.html'));
+});
+
+app.get('/api/pm/dashboard', (req, res) => {
   if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
   res.sendFile('/home/pm/public/dashboard.html', (err) => {
     if (err && !res.headersSent) res.status(404).send('dashboard not generated yet');
