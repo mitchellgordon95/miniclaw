@@ -580,7 +580,7 @@ app.post('/twilio-sms/webhook', async (req, res) => {
   if (imageBlocks.length > 0) {
     content = [
       ...imageBlocks,
-      { type: 'text', text: messageBody || 'What is this?' },
+      { type: 'text', text: messageBody || "Here's an image" },
     ];
   } else {
     content = messageBody;
@@ -637,6 +637,16 @@ app.get('/api/status', (req, res) => {
     sessionId: getSessionId(),
     contextTokens: getContextTokens(),
     handoffThreshold: HANDOFF_THRESHOLD,
+  });
+});
+
+// Prediction-markets dashboard: static file regenerated hourly by the pm user's
+// cron (see ~pm/prediction_markets/code/server/). Token-authed by design; do not
+// make public without Mitchell's explicit OK.
+app.get('/pm/dashboard', (req, res) => {
+  if (!checkAuth(req)) return res.status(401).json({ error: 'unauthorized' });
+  res.sendFile('/home/pm/public/dashboard.html', (err) => {
+    if (err && !res.headersSent) res.status(404).send('dashboard not generated yet');
   });
 });
 
