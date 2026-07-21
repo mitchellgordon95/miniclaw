@@ -52,6 +52,7 @@
     .chord-quiz-btn { background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd; border-radius: 5px; padding: 3px 10px; font-size: 0.8em; cursor: pointer; white-space: nowrap; }
     .chord-quiz-btn:hover { background: #1d4ed8; color: #fff; }
     .chord-quiz-feedback { font-size: 0.8em; color: #94a3b8; white-space: nowrap; }
+    .chord-voice-sel { background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd; border-radius: 5px; padding: 3px 6px; font-size: 0.8em; cursor: pointer; }
     /* Never show a quiz answer as raw text, even mid-stream before enhancement */
     pre:has(code.language-chords-quiz) { filter: blur(8px); user-select: none; }
     /* Inline piano keyboard (```keyboard blocks) */
@@ -251,6 +252,19 @@
 
     const pitchClass = (name) => (NOTE_SEMITONES[name[0]] + (name[1] === '#' ? 1 : name[1] === 'b' ? -1 : 0) + 12) % 12;
 
+    const INTERVAL_NAMES = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 'TT', 'P5', 'm6', 'M6', 'm7', 'M7', 'P8'];
+    const INTERVAL_SEMITONES = Object.fromEntries(INTERVAL_NAMES.map((n, i) => [n, i]));
+    const intervalName = (d) => (d >= 0 && d <= 12 ? INTERVAL_NAMES[d] : null);
+
+    // "P5"/"p5"/"m3"/"M3"/"TT"/"tritone" -> canonical interval key (m/M case-sensitive), else null
+    function normalizeIntervalToken(tok) {
+      if (/^(tt|tritone)$/i.test(tok)) return 'TT';
+      const m = tok.match(/^([PpMm])([1-8])$/);
+      if (!m) return null;
+      const key = (m[1] === 'p' ? 'P' : m[1]) + m[2];
+      return INTERVAL_SEMITONES[key] !== undefined ? key : null;
+    }
+
     function noteToMidi(name) {
       const m = name.match(/^([A-G][#b]?)(\d)$/);
       return m ? 12 * (+m[2] + 1) + pitchClass(m[1]) : null; // C4 = 60
@@ -301,7 +315,13 @@
         const notes = names.map(noteToMidi);
         if (!notes.length || notes.some((n) => n === null)) return null;
         const notesLabel = names.join('·');
-        return { notes, beats, label: inferChordName(notes) || notesLabel, notesLabel, single: notes.length === 1 };
+        let label = inferChordName(notes) || notesLabel;
+        if (notes.length === 2) {
+          // dyads are intervals, not chords: "C4·G4 (P5)" beats "C5"
+          const iv = intervalName(Math.max(...notes) - Math.min(...notes));
+          if (iv) label = `${notesLabel} (${iv})`;
+        }
+        return { notes, beats, label, notesLabel, single: notes.length === 1 };
       }
       const midi = noteToMidi(body);
       if (midi !== null) return { notes: [midi], beats, label: body, single: true };
@@ -335,25 +355,67 @@
       document.querySelectorAll('.chord-playing').forEach((el) => el.classList.remove('chord-playing'));
     }
 
+    // Electric-piano voice: three sine partials per note — body (holds), an octave
+    // partial slightly detuned for movement, and a fast-decaying 2-octave "tine"
+    // that gives the Rhodes-style bell attack. Percussive envelope, no filter.
+    // "sine" is the single pure fundamental. Selected via the voice dropdown on
+    // keyboard/drill widgets; global setting, persisted in localStorage.
+    const SYNTH_VOICES = {
+      epiano: [
+        { ratio: 1, gain: 1.0, detune: 0, decay: 0 },
+        { ratio: 2, gain: 0.28, detune: 3, decay: 1.4 },
+        { ratio: 4, gain: 0.15, detune: 0, decay: 0.3 },
+      ],
+      sine: [{ ratio: 1, gain: 1.0, detune: 0, decay: 0 }],
+    };
+    let synthVoice = localStorage.getItem('synthVoice') in SYNTH_VOICES ? localStorage.getItem('synthVoice') : 'epiano';
+
+    function voiceSelect() {
+      const sel = document.createElement('select');
+      sel.className = 'chord-voice-sel';
+      sel.title = 'synth voice';
+      for (const [val, label] of [['epiano', 'e-piano'], ['sine', 'sine']]) {
+        const o = document.createElement('option');
+        o.value = val;
+        o.textContent = label;
+        sel.appendChild(o);
+      }
+      sel.value = synthVoice;
+      sel.onchange = () => {
+        synthVoice = sel.value;
+        localStorage.setItem('synthVoice', synthVoice);
+        // sync any other voice dropdowns on the page
+        document.querySelectorAll('.chord-voice-sel').forEach((s) => { if (s !== sel) s.value = synthVoice; });
+      };
+      return sel;
+    }
+
     function scheduleChord(midiNotes, when, dur) {
-      const gainPerVoice = Math.min(0.3, 0.5 / midiNotes.length);
+      const partials = SYNTH_VOICES[synthVoice];
+      const gainPerVoice = synthVoice === 'sine' ? Math.min(0.3, 0.5 / midiNotes.length) : Math.min(0.22, 0.4 / midiNotes.length);
       for (const midi of midiNotes) {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        const filter = audioCtx.createBiquadFilter();
-        osc.type = 'triangle';
-        osc.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
-        filter.type = 'lowpass';
-        filter.frequency.value = 2200;
-        gain.gain.setValueAtTime(0, when);
-        gain.gain.linearRampToValueAtTime(gainPerVoice, when + 0.02);
-        gain.gain.linearRampToValueAtTime(gainPerVoice * 0.6, when + 0.25);
-        gain.gain.setValueAtTime(gainPerVoice * 0.6, when + Math.max(0.25, dur - 0.3));
-        gain.gain.linearRampToValueAtTime(0.0001, when + dur);
-        osc.connect(filter).connect(gain).connect(audioCtx.destination);
-        osc.start(when);
-        osc.stop(when + dur + 0.05);
-        activeVoices.push(osc);
+        const freq = 440 * Math.pow(2, (midi - 69) / 12);
+        for (const p of partials) {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq * p.ratio;
+          osc.detune.value = p.detune;
+          const peak = gainPerVoice * p.gain;
+          gain.gain.setValueAtTime(0, when);
+          gain.gain.linearRampToValueAtTime(peak, when + 0.006);
+          if (p.decay) {
+            gain.gain.linearRampToValueAtTime(0.0001, when + Math.min(dur, p.decay));
+          } else {
+            gain.gain.linearRampToValueAtTime(peak * 0.55, when + 0.35);
+            gain.gain.setValueAtTime(peak * 0.55, when + Math.max(0.35, dur - 0.25));
+            gain.gain.linearRampToValueAtTime(0.0001, when + dur);
+          }
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(when);
+          osc.stop(when + dur + 0.05);
+          activeVoices.push(osc);
+        }
       }
     }
 
@@ -459,9 +521,29 @@
         const m = guessRaw.match(/^([A-G][#b]?)(\d)?$/);
         return !!m && pitchClass(m[1]) === answer.notes[0] % 12;
       }
+      // dyads also accept interval names ("P5", "m3", "TT")
+      if (answer.notes.length === 2) {
+        const key = normalizeIntervalToken(guessRaw);
+        if (key) {
+          const d = Math.max(...answer.notes) - Math.min(...answer.notes);
+          return INTERVAL_SEMITONES[key] === d || (d > 12 && INTERVAL_SEMITONES[key] === d % 12);
+        }
+      }
+      const same = (notes) => notes && pcSetKey(notes) === pcSetKey(answer.notes) && bassPc(notes) === bassPc(answer.notes);
       const g = parseToken(guessRaw);
-      if (!g || !g.notes) return false;
-      return pcSetKey(g.notes) === pcSetKey(answer.notes) && bassPc(g.notes) === bassPc(answer.notes);
+      if (g && g.notes && same(g.notes)) return true;
+      // "D5" parses as the note D5, shadowing the D power chord; for multi-note answers try the chord reading too
+      if (g && g.single && same(parseChord(guessRaw))) return true;
+      // note-list guess, bottom to top, octaves optional: "A-D", "C·G", "F#,B"
+      const parts = guessRaw.split(/[-·,+&]+/);
+      if (parts.length === answer.notes.length && parts.length > 1) {
+        const pcs = parts.map((p) => { const m = p.match(/^([A-G][#b]?)(\d)?$/); return m ? pitchClass(m[1]) : null; });
+        if (!pcs.includes(null)) {
+          const expected = [...answer.notes].sort((a, b) => a - b).map((n) => ((n % 12) + 12) % 12);
+          return pcs.every((pc, i) => pc === expected[i]);
+        }
+      }
+      return false;
     }
 
     function buildQuizWidget(text) {
@@ -496,16 +578,23 @@
       checkBtn.onclick = () => {
         if (revealed) return;
         const guesses = (input.value.match(CHORD_TOKEN_RE) || []).filter((g) => g !== '|');
-        let right = 0;
-        guessables.forEach((g, i) => {
-          const ok = i < guesses.length && tokenMatches(g.parsed, guesses[i]);
+        // "answer both notes" mode: if the token count matches total note count
+        // (rather than item count), give each item its notes' worth of tokens
+        const noteTotal = guessables.reduce((s, g) => s + g.parsed.notes.length, 0);
+        const perNote = guesses.length === noteTotal && noteTotal !== guessables.length;
+        let right = 0, gi = 0;
+        guessables.forEach((g) => {
+          const take = perNote ? g.parsed.notes.length : 1;
+          const chunk = guesses.slice(gi, gi + take);
+          gi += take;
+          const ok = chunk.length === take && tokenMatches(g.parsed, chunk.join('-'));
           g.chip.classList.toggle('chord-right', ok);
           g.chip.classList.toggle('chord-wrong', !ok);
           g.chip.textContent = ok ? g.parsed.label : '?'; // a correct guess earns the reveal
           if (ok) right++;
         });
         feedback.textContent = `${right}/${guessables.length}` +
-          (guesses.length !== guessables.length ? ` (got ${guesses.length} guesses)` : '');
+          (guesses.length !== guessables.length && !perNote ? ` (got ${guesses.length} guesses)` : '');
       };
       input.onkeydown = (e) => { if (e.key === 'Enter') checkBtn.onclick(); };
       const revealBtn = document.createElement('button');
@@ -529,6 +618,7 @@
     // ```keyboard blocks render a clickable piano (default C3-C5; `range: C2 C4` to change).
     // Tap a key to hear it. "hold" latches keys into a chord (a mouse can't hold three keys),
     // replaying the set on every change and naming it via inferChordName.
+    // ▼/▲ shift the whole range (and any held notes) by a whole step.
     function buildKeyboardWidget(text) {
       let lo = 48, hi = 72; // C3..C5
       for (const line of text.trim().split('\n')) {
@@ -581,46 +671,74 @@
       clearBtn.className = 'chord-quiz-btn';
       clearBtn.textContent = 'clear';
       clearBtn.onclick = clearHeld;
-      widget.append(playBtn, holdBtn, clearBtn, nameEl);
+      const shiftBy = (d) => {
+        if (lo + d < 21 || hi + d > 108) return; // keep within A0..C8
+        lo += d; hi += d;
+        while (isBlack(lo)) lo--;
+        while (isBlack(hi)) hi++;
+        const moved = [...held].map((n) => n + d);
+        held.clear();
+        for (const n of moved) held.add(n);
+        buildKeys();
+        updateName();
+        playHeld();
+      };
+      const downBtn = document.createElement('button');
+      downBtn.className = 'chord-quiz-btn';
+      downBtn.textContent = '▼';
+      downBtn.title = 'shift down a whole step';
+      downBtn.onclick = () => shiftBy(-2);
+      const upBtn = document.createElement('button');
+      upBtn.className = 'chord-quiz-btn';
+      upBtn.textContent = '▲';
+      upBtn.title = 'shift up a whole step';
+      upBtn.onclick = () => shiftBy(2);
+      widget.append(playBtn, holdBtn, clearBtn, downBtn, upBtn, voiceSelect(), nameEl);
 
       const scroll = document.createElement('div');
       scroll.className = 'kb-scroll';
       const piano = document.createElement('div');
       piano.className = 'kb-piano';
       const WHITE_W = 34, BLACK_W = 20;
-      let whiteCount = 0;
-      for (let n = lo; n <= hi; n++) {
-        const key = document.createElement('button');
-        key.dataset.midi = n;
-        if (isBlack(n)) {
-          key.className = 'kb-key kb-black';
-          key.style.left = `${whiteCount * WHITE_W - BLACK_W / 2}px`;
-          key.title = midiToName(n);
-        } else {
-          key.className = 'kb-key kb-white';
-          key.style.left = `${whiteCount * WHITE_W}px`;
-          const label = document.createElement('span');
-          label.className = 'kb-label';
-          label.textContent = midiToName(n);
-          key.appendChild(label);
-          whiteCount++;
-        }
-        key.onpointerdown = () => {
-          if (holdMode) {
-            if (held.has(n)) { held.delete(n); key.classList.remove('kb-held'); }
-            else { held.add(n); key.classList.add('kb-held'); }
-            updateName();
-            playHeld();
+      const buildKeys = () => {
+        piano.textContent = '';
+        keyEls.clear();
+        let whiteCount = 0;
+        for (let n = lo; n <= hi; n++) {
+          const key = document.createElement('button');
+          key.dataset.midi = n;
+          if (isBlack(n)) {
+            key.className = 'kb-key kb-black';
+            key.style.left = `${whiteCount * WHITE_W - BLACK_W / 2}px`;
+            key.title = midiToName(n);
           } else {
-            playChords([{ notes: [n], beats: 2 }], 100);
-            key.classList.add('kb-active');
-            setTimeout(() => key.classList.remove('kb-active'), 350);
+            key.className = 'kb-key kb-white';
+            key.style.left = `${whiteCount * WHITE_W}px`;
+            const label = document.createElement('span');
+            label.className = 'kb-label';
+            label.textContent = midiToName(n);
+            key.appendChild(label);
+            whiteCount++;
           }
-        };
-        keyEls.set(n, key);
-        piano.appendChild(key);
-      }
-      piano.style.width = `${whiteCount * WHITE_W}px`;
+          if (held.has(n)) key.classList.add('kb-held');
+          key.onpointerdown = () => {
+            if (holdMode) {
+              if (held.has(n)) { held.delete(n); key.classList.remove('kb-held'); }
+              else { held.add(n); key.classList.add('kb-held'); }
+              updateName();
+              playHeld();
+            } else {
+              playChords([{ notes: [n], beats: 2 }], 100);
+              key.classList.add('kb-active');
+              setTimeout(() => key.classList.remove('kb-active'), 350);
+            }
+          };
+          keyEls.set(n, key);
+          piano.appendChild(key);
+        }
+        piano.style.width = `${whiteCount * WHITE_W}px`;
+      };
+      buildKeys();
       scroll.appendChild(piano);
       widget.appendChild(scroll);
       return widget;
@@ -687,7 +805,7 @@
       reveal.style.display = 'none';
       const summary = document.createElement('div');
       summary.className = 'drill-summary';
-      widget.append(playBtn, replayBtn, scoreEl, answers, reveal, summary);
+      widget.append(playBtn, replayBtn, voiceSelect(), scoreEl, answers, reveal, summary);
 
       let current = null; // {quality, notes}
       let lastKey = null, asked = 0, right = 0;
@@ -879,7 +997,7 @@
       reveal.style.display = 'none';
       const summary = document.createElement('div');
       summary.className = 'drill-summary';
-      widget.append(playBtn, replayBtn, scoreEl, answers, reveal, summary);
+      widget.append(playBtn, replayBtn, voiceSelect(), scoreEl, answers, reveal, summary);
       let bank = null;
       playBtn.disabled = true;
       summary.textContent = 'loading audio bank…';
